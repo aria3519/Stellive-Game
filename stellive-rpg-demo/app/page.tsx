@@ -7,7 +7,7 @@ type Hero={id:number;name:string;job:string;gen:number;hp:number;atk:number;def:
 const HEROES:Hero[]=[
 // id = public/portraits/{id}.png
 {id:1,name:'강지',job:'샤쵸',gen:1,hp:1080,atk:130,def:85,skill:'긴급 사내 회의',ultimate:'샤쵸의 결재',kind:'shield',bio:'스텔라이브를 이끄는 샤쵸. 멤버들 곁에서 든든하게 뒤를 받쳐 준다.'},
-{id:2,name:'아야츠노 유니',job:'유니콘',gen:1,hp:980,atk:120,def:70,skill:'알리콘의 뿔빛',ultimate:'최후의 유니콘',kind:'heal',bio:'다른 유니콘들이 멸종할 때 봉인되었다가 지구에서 깨어난 알리콘. 보호를 받기 위해 스텔라이브에 합류했다.'},
+{id:2,name:'아야츠노 유니',job:'유니콘',gen:1,hp:980,atk:120,def:70,skill:'유니콘의 뿔빛',ultimate:'최후의 유니콘',kind:'heal',bio:'다른 유니콘들이 멸종할 때 봉인되었다가 지구에서 깨어난 마지막 유니콘. 보호를 받기 위해 스텔라이브에 합류했다.'},
 {id:3,name:'사키하네 후야',job:'고룡',gen:1,hp:1120,atk:165,def:75,skill:'고룡의 숨결',ultimate:'떨어진 별의 포효',kind:'attack',bio:'용의 혈통을 이은 고룡이자 한때 별이었던 존재. 이름을 잊었지만, 자신을 부르는 유니의 목소리를 따라 스텔라이브에 왔다.'},
 {id:4,name:'시라유키 히나',job:'아이돌',gen:2,hp:1020,atk:95,def:65,skill:'용기의 노래',ultimate:'다시 오른 무대',kind:'heal',bio:'소심한 성격 탓에 아이돌의 꿈을 포기했지만, 친구의 권유로 올린 노래 영상을 계기로 아이돌 회사에 들어왔다.'},
 {id:5,name:'네네코 마시로',job:'고양이',gen:2,hp:900,atk:175,def:45,skill:'냥냥 탐지 스캔',ultimate:'고양이 행성의 부름',kind:'attack',bio:'고향 행성의 고양이 동료들을 찾아 지구에 왔다가 탐지기를 잃어버리고 스텔라이브에 오게 되었다.'},
@@ -66,7 +66,7 @@ const STAR_EFFECT=['','능력치 +8%','스킬 위력 +15%','능력치 +8%','전�
 // RP-flavoured name for each breakthrough level, per member
 const RP_STARS:Record<number,string[]>={
 1:['첫 결재','사내 공지','긴급 회의','예산 승인','전사 워크숍','샤쵸의 결단'],
-2:['봉인의 균열','뿔빛의 각성','되찾은 날개','별빛 갈기','유니콘의 맹세','최후의 알리콘'],
+2:['봉인의 균열','뿔빛의 각성','되찾은 날개','별빛 갈기','유니콘의 맹세','전설의 유니콘'],
 3:['떠오른 기억','용의 비늘','고룡의 혈통','별의 잔광','되찾은 이름','다시 빛나는 별'],
 4:['작은 용기','첫 노래 영상','데뷔 무대','팬들의 응원','센터의 자리','꿈의 아이돌'],
 5:['수상한 신호','탐지기 수리','동료의 흔적','고양이 네트워크','행성 교신','귀향의 별빛'],
@@ -123,6 +123,13 @@ function Portrait({id,className}:{id:number;className?:string}){return <img clas
 const DEFAULT_ART=6;
 const artSrc=(id:number)=>`/battle/${encodeURIComponent(`${H(id).name.split(' ').pop()}_전투`)}.png`;
 // gacha reveal art: public/gacha/{이름}_뽑기.png (full-scene illustration) — falls back to the battle cutout when missing
+// where the face sits in each gacha illustration (x%, y%), used to crop it into a character card
+const ART_FOCUS:Record<number,[number,number]>={1:[56,20],2:[54,24],3:[60,32],4:[57,19],5:[57,18],6:[57,33],7:[57,24],8:[74,24],9:[56,20],10:[63,23],11:[35,24]};
+// object-position puts the face at (fx%,fy%) of the card; zooming around origin O moves it to O+s(f-O),
+// so pick O to land the face at (50%,40%) — below the unit tag
+const CARD_ZOOM=1.9;
+const cardCrop=(id:number):React.CSSProperties=>{const [fx,fy]=ART_FOCUS[id]??[50,25];const o=(t:number,f:number)=>Math.max(0,Math.min(100,(t-CARD_ZOOM*f)/(1-CARD_ZOOM)));
+return {objectPosition:`${fx}% ${fy}%`,transformOrigin:`${o(50,fx)}% ${o(40,fy)}%`}};
 const gachaSrc=(id:number)=>`/gacha/${encodeURIComponent(`${H(id).name.split(' ').pop()}_뽑기`)}.png`;
 function BattleArt({id,className}:{id:number;className?:string}){return <img key={id} className={className} src={artSrc(id)} alt="" draggable={false} onError={e=>{const t=e.currentTarget;if(!t.dataset.fb){t.dataset.fb='1';t.src=artSrc(DEFAULT_ART)}}}/>}
 
@@ -149,6 +156,10 @@ const [bannerIdxRaw,setBannerIdx]=useState(0);const bannerIdx=Math.min(bannerIdx
 const [shopModal,setShopModal]=useState<'rates'|'history'|'shards'|null>(null);
 const [summon,setSummon]=useState<{key:number;pulls:Pull[];phase:'orb'|'char'|'reveal';tier:'stone'|'shard'|'char'}|null>(null);
 const [detail,setDetail]=useState<number|null>(null);
+// member detail is a full screen with two tabs; rpSel is the breakthrough node being inspected
+const [detailTab,setDetailTab]=useState<'info'|'rp'>('info');
+const [rpSel,setRpSel]=useState<number|null>(null);
+const openDetail=(id:number)=>{setDetail(id);setDetailTab('info');setRpSel(null)};
 const [genTab,setGenTab]=useState(0);
 const [floats,setFloats]=useState<Float[]>([]);
 const [cutin,setCutin]=useState<Hero|null>(null);
@@ -311,12 +322,12 @@ return <main className="phone">
 
 {g.screen==='chars'&&<section className="screen chars">
 <TopBack title="캐릭터"/>
-<div className="partyRow">{[0,1,2].map(i=>{const id=g.party[i];return <button key={i} className="slot" onClick={()=>id&&setDetail(id)}>{id?<><Portrait id={id}/>{id===g.lead&&<Crown size={14} className="crown"/>}</>:<span>+</span>}</button>})}
+<div className="partyRow">{[0,1,2].map(i=>{const id=g.party[i];return <button key={i} className="slot" onClick={()=>id&&openDetail(id)}>{id?<><Portrait id={id}/>{id===g.lead&&<Crown size={14} className="crown"/>}</>:<span>+</span>}</button>})}
 <div className={`synergy s${syn}`}><Sparkles size={16}/><div><b>{syn?`유닛 ${syn}인 시너지`:'시너지 없음'}</b><small>{syn===3?'공격력 +13%':syn===2?'공격력 +7%':'같은 유닛 2명 이상 편성'}</small></div></div>
 </div>
 <div className="tabs">{['전체',...UNIT.slice(1)].map((t,i)=><button key={t} className={genTab===i?'on':''} onClick={()=>setGenTab(i)}>{t}</button>)}</div>
-<div className="grid">{shown.map(h=>{const K=KIND[h.kind].Icon;const inParty=g.party.includes(h.id);const locked=!g.owned.includes(h.id);return <button key={h.id} className={`card ${inParty?'picked':''} ${locked?'locked':''}`} style={{'--c':GEN_COLOR[h.gen]} as React.CSSProperties} onClick={()=>setDetail(h.id)}>
-<Portrait id={h.id}/><span className="genTag">{UNIT[h.gen]}</span>{(g.stars[h.id]||0)>0&&<span className="cardStars">{'★'.repeat(g.stars[h.id])}</span>}{inParty&&<span className="checkTag"><Check size={12}/>{g.party.indexOf(h.id)+1}</span>}
+<div className="grid">{shown.map(h=>{const K=KIND[h.kind].Icon;const inParty=g.party.includes(h.id);const locked=!g.owned.includes(h.id);return <button key={h.id} className={`card ${inParty?'picked':''} ${locked?'locked':''}`} style={{'--c':GEN_COLOR[h.gen]} as React.CSSProperties} onClick={()=>openDetail(h.id)}>
+{noGachaArt[h.id]?<Portrait id={h.id}/>:<img className="cardArt" src={gachaSrc(h.id)} alt={`${h.name} 이미지`} draggable={false} loading="lazy" style={cardCrop(h.id)} onError={()=>setNoGachaArt(m=>({...m,[h.id]:true}))}/>}<span className="genTag">{UNIT[h.gen]}</span>{(g.stars[h.id]||0)>0&&<span className="cardStars">{'★'.repeat(g.stars[h.id])}</span>}{inParty&&<span className="checkTag"><Check size={12}/>{g.party.indexOf(h.id)+1}</span>}
 {locked&&<span className="lockTag"><Lock size={22}/><small>미보유</small></span>}
 <div className="cardInfo"><K size={12}/><b>{h.name}</b><small>{h.job}</small></div></button>})}</div>
 <div className="ctaBar"><button className="primary" disabled={g.party.length!==3} onClick={()=>go('story',true)}>{g.party.length===3?'편성 완료 · 모험으로':`${3-g.party.length}명 더 선택하세요`}<ChevronRight size={18}/></button></div>
@@ -338,10 +349,10 @@ return <main className="phone">
 <h2>{bn.title}</h2>
 <div className="bannerMeta"><em className={bn.pack.length?'limited':'always'}>{bn.tag}</em>{bn.remain&&<span><Bell size={12}/>남은 시간 <b>{bn.remain}</b></span>}</div>
 </div>
-{bn.pack.length>0&&<div className="getTouch" key={'t'+bannerIdx}><span>획득 터치</span>{bn.pack.map(id=><button key={id} onClick={()=>setDetail(id)} aria-label={H(id).name}><Portrait id={id}/></button>)}</div>}
+{bn.pack.length>0&&<div className="getTouch" key={'t'+bannerIdx}><span>획득 터치</span>{bn.pack.map(id=><button key={id} onClick={()=>openDetail(id)} aria-label={H(id).name}><Portrait id={id}/></button>)}</div>}
 <div className="pityBox" key={'y'+bannerIdx}><small>천장까지</small><b>{PITY-(g.pity[bannerIdx]||0)}</b><small>회</small><div className="pityBar"><i style={{width:`${100*(g.pity[bannerIdx]||0)/PITY}%`}}/></div></div>
 <div className="pickupBox" key={'p'+bannerIdx}>
-{bn.pack.length>0?<><div className="pickupRow">{bn.pack.map(id=><button key={id} className="pickFace" style={{'--c':GEN_COLOR[H(id).gen]} as React.CSSProperties} onClick={()=>setDetail(id)}><Portrait id={id}/>{!g.owned.includes(id)&&<i>NEW</i>}</button>)}
+{bn.pack.length>0?<><div className="pickupRow">{bn.pack.map(id=><button key={id} className="pickFace" style={{'--c':GEN_COLOR[H(id).gen]} as React.CSSProperties} onClick={()=>openDetail(id)}><Portrait id={id}/>{!g.owned.includes(id)&&<i>NEW</i>}</button>)}
 <div className="pickName"><span className="starRow">{[0,1,2,3,4].map(i=><Star key={i} size={11}/>)}</span><b>{bn.pack.length<=2?bn.pack.map(id=>`「${H(id).name.split(' ').pop()}」`).join(' '):`${bn.title} ${bn.pack.length}인`}</b></div></div>
 <p className="rateUp">{bn.title} 멤버 획득 확률 UP!!</p></>:<p className="rateUp">전체 멤버 모집</p>}
 <div className="shopBtns"><button onClick={()=>setShopModal('rates')}>상세 정보</button><button onClick={()=>setShopModal('history')}>모집 기록</button><button onClick={()=>setShopModal('shards')}>조각 교환</button></div>
@@ -368,18 +379,39 @@ return <main className="phone">
 </div></div>}
 </section>}
 
-{d&&<div className="sheetBg" onClick={()=>setDetail(null)}><div className="sheet" onClick={e=>e.stopPropagation()}>
-<button className="iconRound close" onClick={()=>setDetail(null)} aria-label="닫기"><X size={20}/></button>
-<div className="sheetArt" style={{'--c':GEN_COLOR[d.gen]} as React.CSSProperties}><Portrait id={d.id}/><div><span className="genTag big">{UNIT[d.gen]}</span><h2>{d.name}</h2><p>{d.job} · {KIND[d.kind].label}</p></div></div>
+{d&&<section className={`heroView tab-${detailTab}`} key={'hv'+d.id} style={{'--c':GEN_COLOR[d.gen]} as React.CSSProperties}>
+<div className="hvSky"/>
+<div className={`hvArt ${noGachaArt[d.id]?'cutout':''}`} key={'art'+detailTab}>{noGachaArt[d.id]?<BattleArt id={d.id}/>:<img src={gachaSrc(d.id)} alt="" draggable={false} onError={()=>setNoGachaArt(m=>({...m,[d.id]:true}))}/>}</div>
+<header className="hvTop">
+<button className="iconRound" onClick={()=>setDetail(null)} aria-label="뒤로"><ChevronLeft size={22}/></button>
+<div className="hvName"><span className="genTag big">{UNIT[d.gen]}</span><b>{d.name}</b><small>{d.job} · {KIND[d.kind].label}</small></div>
+<nav className="hvTabs">{([['info','정보'],['rp','RP 강화']] as const).map(([t,l])=><button key={t} className={detailTab===t?'on':''} onClick={()=>setDetailTab(t)}>{l}</button>)}</nav>
+<Diamonds/>
+</header>
+{detailTab==='rp'?(()=>{const s=g.stars[d.id]||0;const own=g.owned.includes(d.id);const have=g.shards[d.id]||0;const cost=BT_COST[s];
+const lvSel=rpSel??Math.min(s+1,MAX_STARS);
+// six nodes on a quarter arc (top-right → bottom-left), like an eidolon chart; square box so the curve stays round
+const ANG=Array.from({length:MAX_STARS},(_,i)=>(6+i*14.5)*Math.PI/180);
+const pt=(a:number)=>[8+82*Math.cos(a),6+82*Math.sin(a)];
+const arc=(a0:number,a1:number)=>{const[x0,y0]=pt(a0),[x1,y1]=pt(a1);return `M${x0} ${y0}A82 82 0 0 1 ${x1} ${y1}`};
+return <>
+<div className="rpArc">
+<svg viewBox="0 0 100 100"><path className="rail" d={arc(ANG[0]-.12,ANG[MAX_STARS-1]+.12)}/>{s>1&&<path className="lit" d={arc(ANG[0],ANG[s-1])}/>}</svg>
+{ANG.map((a,i)=>{const lv=i+1;const[x,y]=pt(a);return <button key={lv} className={`rpNode ${lv<=s?'done':''} ${lv===s+1?'next':''} ${[2,4,6].includes(lv)?'big':''} ${lv===lvSel?'sel':''}`} style={{left:`${x}%`,top:`${y}%`}} onClick={()=>setRpSel(lv)} aria-label={`${lv}돌파`}><i>{lv<=s?<Star size={14}/>:lv===s+1?<Sparkles size={14}/>:<Lock size={12}/>}</i><span>{lv}</span></button>})}
+</div>
+<div className="rpCard" key={lvSel}>
+<div className="rpStars">{Array.from({length:MAX_STARS},(_,i)=><Star key={i} size={13} className={i<s?'on':''}/>)}<small>RP 강화 {s}/{MAX_STARS} · 능력치 +{Math.round(STAR_STAT*s*100)}%</small></div>
+<small className="rpLv">{lvSel}단계 · {lvSel<=s?'달성':lvSel===s+1?'다음 단계':'잠김'}</small>
+<h3>{starName(d.id,lvSel)}</h3>
+<p>{STAR_EFFECT[lvSel]}{lvSel%2===0?' · 능력치 +8%':''}</p>
+{!own?<div className="btAction"><Lock size={13}/>멤버를 보유하면 RP 강화를 할 수 있습니다</div>
+:s>=MAX_STARS?<div className="btAction max"><Crown size={14}/>최대 돌파 달성!</div>
+:<div className="btAction"><span>{d.name.split(' ').pop()} 조각 <b className={have>=cost?'ok':''}>{have}</b> / {cost}</span><button className="primary mini" disabled={have<cost} onClick={()=>{breakthrough(d.id);setRpSel(null)}}><Sparkles size={13}/>{s+1}돌파 · {starName(d.id,s+1)}</button></div>}
+<p className="btNote">중복 멤버를 뽑으면 자동으로 1돌파 · 6돌파 이후 중복은 조각 ×{DUP_SHARDS}</p>
+</div></>})():<div className="hvPanel" key="info">
 <p className="bio">{d.bio}</p>
 {(()=>{const st=statOf(g,d.id);const top=1+STAR_STAT*MAX_STARS;return <div className="stats">{([['HP',st.hp,d.hp,1200],['공격',st.atk,d.atk,185],['방어',st.def,d.def,90]] as const).map(([l,val,base,max])=><div key={l}><span>{l}</span><div className="statBar"><i style={{width:`${100*val/(max*top)}%`}}/></div><b>{val}{val>base&&<small className="statUp">+{val-base}</small>}</b></div>)}</div>})()}
-{(()=>{const s=g.stars[d.id]||0;const own=g.owned.includes(d.id);const have=g.shards[d.id]||0;const cost=BT_COST[s];return <div className="btBox" style={{'--c':GEN_COLOR[d.gen]} as React.CSSProperties}>
-<div className="btHead"><b>RP 강화 · 돌파</b><span className="btStars">{Array.from({length:MAX_STARS},(_,i)=><Star key={i} size={14} className={i<s?'on':''}/>)}</span><small>{s}/{MAX_STARS}</small></div>
-<ol className="btList">{Array.from({length:MAX_STARS},(_,i)=>{const lv=i+1;return <li key={lv} className={`${lv<=s?'done':''} ${lv===s+1?'next':''} ${[2,4,6].includes(lv)?'big':''}`}><i>{lv}</i><b>{starName(d.id,lv)}</b><small>{STAR_EFFECT[lv]}</small></li>})}</ol>
-{own&&(s<MAX_STARS?<div className="btAction"><span>{H(d.id).name.split(' ').pop()} 조각 <b className={have>=cost?'ok':''}>{have}</b> / {cost}</span><button className="primary mini" disabled={have<cost} onClick={()=>breakthrough(d.id)}><Sparkles size={13}/>{s+1}돌파 · {starName(d.id,s+1)}</button></div>
-:<div className="btAction max"><Crown size={14}/>최대 돌파 달성!</div>)}
-<p className="btNote">중복 멤버를 뽑으면 자동으로 1돌파 · 6돌파 이후 중복은 조각 ×{DUP_SHARDS}</p>
-</div>})()}
+{(()=>{const s=g.stars[d.id]||0;return <button className="rpLink" onClick={()=>setDetailTab('rp')}><b>RP 강화</b><span className="btStars">{Array.from({length:MAX_STARS},(_,i)=><Star key={i} size={13} className={i<s?'on':''}/>)}</span><small>{s}/{MAX_STARS}</small><ChevronRight size={16}/></button>})()}
 {(()=>{const s=g.stars[d.id]||0;const line=(type:Act,heal:number,shield:number)=>{const c=coefOf(d.kind,type,s),base=coefOf(d.kind,type,0);
 const dmg=<>피해계수 <b className="coef">{pct(c)}</b>{c>base&&<small className="statUp">돌파 +{pct(c-base)}</small>}</>;
 return d.kind==='attack'||type==='basic'?<>적에게 {dmg}</>:d.kind==='heal'?<>아군 전체 HP {heal} 회복 · {dmg}</>:<>파티 보호막 {shield} · {dmg}</>};
@@ -392,7 +424,7 @@ return <><div className="skillInfo basic"><Swords size={18}/><div><b>기본 공�
 </div>:<div className="sheetActions">
 <button className="secondary" disabled><Lock size={16}/>미보유 멤버</button>
 {g.screen!=='shop'&&<button className="primary" onClick={()=>{setDetail(null);go('shop')}}><ShoppingBag size={16}/>상점에서 모집</button>}
-</div>}</div></div>}
+</div>}</div>}</section>}
 
 {g.screen==='story'&&<section className="screen story">
 <TopBack title={chapterInfo.title}/>
