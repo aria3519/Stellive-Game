@@ -742,3 +742,46 @@ box-shadow:0 0 12px #7fd8ff,inset 0 0 0 3px #4fb4e6,inset 0 0 0 5px #e6f8ff;anim
 .rpCard h3{margin:2px 0 4px;font-size:18px}
 .rpCard p{margin:0;font-size:12px;color:#ffd36b}
 .rpCard .btNote{color:#7f8bb0}
+/* levels */
+button.stageNode{padding:0;font:inherit;color:inherit;cursor:pointer}
+button.stageNode:disabled{cursor:default}
+.cardLv{position:absolute;top:22px;right:4px;background:#000b;color:#fff;font-size:9px;font-weight:900;padding:1px 5px;border-radius:6px}
+.lvTag{flex:none;font-size:9px;font-weight:900;color:#ffd36b}
+.lvRow{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;margin-bottom:10px;font-size:11px;color:#b0bdd3}
+.lvRow b{font-size:16px;color:#fff}.lvRow b small{font-size:10px;color:#8a96b3}
+.lvRow .statBar i{background:linear-gradient(90deg,#ffd36b,#ffb44d)}
+.lvUps{display:flex;gap:8px;margin:2px 0 4px}
+.lvUps span{display:flex;align-items:center;gap:3px;padding:3px 8px 3px 3px;border-radius:999px;background:#0b1020cc;font-size:11px;color:#b0bdd3}
+.lvUps img{width:24px;height:24px;border-radius:50%;object-fit:cover}
+.lvUps span.up{color:#fff;box-shadow:0 0 0 1px #ffd36b88}.lvUps span.up b{color:#ffd36b}
+/* combo parry */
+.intent.combo{border-color:#ffd36b;box-shadow:0 0 12px #ffd36b55}
+.parry{position:absolute;inset:0;z-index:25;background:#0005;touch-action:manipulation}
+.parryHint{position:absolute;left:0;right:0;top:9%;text-align:center;font-size:13px;font-weight:700;color:#ffe9a8;text-shadow:0 2px 6px #000}
+.parryDot{position:absolute;width:84px;height:84px;margin:-42px 0 0 -42px;padding:0;border-radius:50%;border:4px solid #ffd36b88;background:#0b102099;color:#fff;font:inherit;cursor:pointer;opacity:.55;transition:transform .15s,opacity .15s,background .15s}
+.parryDot.cur{opacity:1;border-color:#ffd36b;box-shadow:0 0 18px #ffd36b88,inset 0 0 18px #ffd36b55;z-index:2}
+.parryDot b{position:relative;font-size:30px;font-weight:900;font-style:italic;text-shadow:0 0 10px #ffd36b;pointer-events:none}
+.parryRing{position:absolute;inset:-4px;border-radius:50%;border:3px solid #fff3b0;box-shadow:0 0 10px #ffd36b;pointer-events:none;animation:parryRing var(--ms) linear var(--d) both}
+@keyframes parryRing{from{transform:scale(2.6);opacity:0}25%{opacity:.5}to{transform:scale(1);opacity:1}}
+.parryDot.perfect,.parryDot.good,.parryDot.miss{opacity:1;animation:parryDone .5s forwards}
+.parryDot.perfect .parryRing,.parryDot.good .parryRing,.parryDot.miss .parryRing{display:none}
+.parryDot.perfect{border-color:#ffd36b;background:#ffd36b66;transform:scale(1.18)}
+.parryDot.good{background:#fff3b033}
+.parryDot.miss{border-color:#ff5c6c;background:#ff5c6c33}
+.parryDot.perfect b,.parryDot.good b,.parryDot.miss b{font-size:15px}
+.parryDot.miss b{color:#ff8a96;text-shadow:0 0 10px #ff5c6c}
+@keyframes parryDone{70%{opacity:1}to{opacity:0}}
+/* ultimate gauge: solid fill with a bright edge while charging; gold, pulsing and shining once ready */
+.allySkills .skillBtn.ult.lack{opacity:1}
+.skillBtn.ult:before{background:linear-gradient(#c58bff,#7a4cff);box-shadow:0 -2px 0 #f3e2ff,0 -4px 10px #c58bffaa;opacity:.85}
+.skillBtn.ult small{font-size:11px;font-weight:900;color:#fff;text-shadow:0 1px 2px #000}
+.allySkills .skillBtn.ult small{font-size:10px}
+.skillBtn.ult.ready{background:linear-gradient(#ffe08a,#ff9f43 55%,#ff5fa2);border:2px solid #fff3b0;color:#3a1600;animation:ultReady .8s infinite alternate}
+.skillBtn.ult.ready:before{height:100%;background:linear-gradient(105deg,#0000 35%,#fff9 50%,#0000 65%);box-shadow:none;opacity:1;animation:ultShine 1.4s infinite;transition:none}
+.skillBtn.ult.ready b,.skillBtn.ult.ready small{color:#3a1600;text-shadow:0 1px 0 #fff8}
+.skillBtn.ult.ready svg{color:#3a1600}
+@keyframes ultReady{from{box-shadow:0 4px 0 #8a3b00,0 0 8px #ffd36b}to{box-shadow:0 4px 0 #8a3b00,0 0 22px 4px #ffb44d;transform:translateY(-2px)}}
+@keyframes ultShine{from{transform:translateX(-120%)}to{transform:translateX(120%)}}
+.ally.ultReady .allyFace{border-color:#ffd36b;box-shadow:0 0 0 2px #ffd36b,0 0 14px #ffb44d;animation:ultFace .8s infinite alternate}
+@keyframes ultFace{to{box-shadow:0 0 0 2px #fff3b0,0 0 22px #ffb44d}}
+.ultBadge{position:absolute;left:2px;top:2px;display:flex;align-items:center;gap:1px;font-style:normal;font-size:9px;font-weight:900;color:#3a1600;background:linear-gradient(#ffe08a,#ff9f43);border-radius:6px;padding:1px 4px;box-shadow:0 0 8px #ffb44d}

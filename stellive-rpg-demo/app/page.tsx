@@ -12,7 +12,7 @@ const HEROES:Hero[]=[
 {id:4,name:'시라유키 히나',job:'아이돌',gen:2,hp:1020,atk:95,def:65,skill:'용기의 노래',ultimate:'다시 오른 무대',kind:'heal',bio:'소심한 성격 탓에 아이돌의 꿈을 포기했지만, 친구의 권유로 올린 노래 영상을 계기로 아이돌 회사에 들어왔다.'},
 {id:5,name:'네네코 마시로',job:'고양이',gen:2,hp:900,atk:175,def:45,skill:'냥냥 탐지 스캔',ultimate:'고양이 행성의 부름',kind:'attack',bio:'고향 행성의 고양이 동료들을 찾아 지구에 왔다가 탐지기를 잃어버리고 스텔라이브에 오게 되었다.'},
 {id:6,name:'아카네 리제',job:'천마',gen:2,hp:1200,atk:155,def:90,skill:'핏빛 선율',ultimate:'붉은 달의 세레나데',kind:'attack',bio:'아이돌을 동경해 피를 거의 마시지 않는 반뱀파이어. 흡혈보다 음악을 사랑하다 성에서 쫓겨났다.'},
-{id:7,name:'아라하시 타비',job:'타비',gen:2,hp:1040,atk:145,def:65,skill:'보물 감정안',ultimate:'하늘 도시의 대도',kind:'attack',bio:'다른 차원에서 온 보물 사냥꾼. 하늘 도시의 보물을 훔쳐 달아나다 길을 잃고 이 세계로 떨어졌다.'},
+{id:7,name:'아라하시 타비',job:'타B',gen:2,hp:1040,atk:145,def:65,skill:'보물 감정안',ultimate:'하늘 도시의 대도',kind:'attack',bio:'다른 차원에서 온 보물 사냥꾼. 하늘 도시의 보물을 훔쳐 달아나다 길을 잃고 이 세계로 떨어졌다.'},
 {id:8,name:'텐코 시부키',job:'여우신',gen:3,hp:970,atk:150,def:65,skill:'여우불',ultimate:'천년 신사의 결계',kind:'shield',bio:'천 년을 산 여우신. 신사에 버려진 게임기 때문에 게임 폐인이 되었지만, 찾아오는 이들을 외면하지 못하다 스텔라이브를 만났다.'},
 {id:9,name:'아오쿠모 린',job:'뇨봇',gen:3,hp:1100,atk:135,def:85,skill:'진심의 봉사',ultimate:'완벽한 티타임',kind:'shield',bio:'메이드 컨셉 지하 아이돌 출신. 컨셉을 소화하지 못해 그룹이 해체되자, 진심 어린 봉사를 배우러 왔다.'},
 {id:10,name:'하나코 나나',job:'비밀요원',gen:3,hp:890,atk:185,def:45,skill:'잠입 저격',ultimate:'코드네임 해제',kind:'attack',bio:'임무를 망치고 도망 중인 전직 비밀 요원. 정체를 숨긴 채 스텔라이브에 합류했다.'},
@@ -23,37 +23,48 @@ const GEN_COLOR=['','#ffd36b','#c29bff','#7cc4ff'];
 const UNIT=['','에버리스','유니버스','클리셰'];
 
 type Screen='lobby'|'chars'|'story'|'map'|'shop'|'battle'|'victory'|'defeat';
-type Game={party:number[];lead:number;chapter:number;diamonds:number;owned:number[];history:Pull[];shards:Record<number,number>;pity:Record<number,number>;stars:Record<number,number>;enemyHp:number;hp:Record<number,number>;sp:number;energy:Record<number,number>;used:number[];turn:number;shield:number;intent:'aoe'|'smash';target:number;screen:Screen};
+type Game={party:number[];lead:number;chapter:number;fight:number;levels:Record<number,number>;exp:Record<number,number>;diamonds:number;owned:number[];history:Pull[];shards:Record<number,number>;pity:Record<number,number>;stars:Record<number,number>;enemyHp:number;hp:Record<number,number>;sp:number;energy:Record<number,number>;used:number[];turn:number;shield:Record<number,number>;intent:Intent;target:number;screen:Screen};
 type Float={id:number;text:string;kind:string;x:number;y:number};
 
 const H=(id:number)=>HEROES.find(h=>h.id===id)!;
 const fill=(f:(h:Hero)=>number)=>Object.fromEntries(HEROES.map(h=>[h.id,f(h)]));
 // images in public/monsters (copied from crpg-studio _default_monsters/fantasy)
-// `chapter` in the save is the index into STAGES (regions are derived from it)
+// `chapter` in the save is the index into STAGES (regions are derived from it); `fight` is the stage picked to battle (≤ chapter, so cleared stages can be replayed for EXP)
+// levels 1–50: each level is ×1.05 HP/ATK/DEF/heal/shield (Lv50 ≈ ×10.9). Every win gives the stage's EXP to all 3 party members
+const MAX_LV=50,LV_GROWTH=1.05;
+const lvMul=(lv:number)=>Math.pow(LV_GROWTH,lv-1);
+const expNeed=(lv:number)=>Math.round(60*Math.pow(1.07,lv-1)); // EXP to go from lv to lv+1
+const addExp=(lv:number,ex:number,gain:number):[number,number]=>{ex+=gain;while(lv<MAX_LV&&ex>=expNeed(lv)){ex-=expNeed(lv);lv++}return lv>=MAX_LV?[MAX_LV,0]:[lv,ex]};
+console.assert(addExp(1,0,expNeed(1)+expNeed(2)+1).join()==='3,1'&&addExp(49,0,1e9).join()==='50,0','addExp');
 const REGION_MAP=[{name:'별빛 마을',icon:'⌂'},{name:'잊힌 숲',icon:'♣'},{name:'심연의 성역',icon:'✦'}];
 type Rank='normal'|'elite'|'boss';
 const STAGE_LIST:[number,string,Rank][]=[
 [0,'뒷골목 불량배','normal'],[0,'고블린 약탈대','normal'],[0,'굶주린 늑대 무리','normal'],[0,'청부 암살자','normal'],[0,'다이어울프 우두머리','elite'],[0,'심연의 하수인','boss'],
 [1,'거대 거미','normal'],[1,'구울','normal'],[1,'해골 병사','normal'],[1,'머맨 약탈자','normal'],[1,'바다뱀','normal'],[1,'와이번','elite'],[1,'숲 트롤','boss'],
 [2,'망령 기사','normal'],[2,'촉수 마물','normal'],[2,'심연의 사도 광신도','normal'],[2,'고대 고룡','elite'],[2,'홍염의 패왕','elite'],[2,'마왕','boss']];
-// enemies scale with stage index; elites and bosses get extra HP and attack
-const STAGES=STAGE_LIST.map(([region,name,rank],i)=>{const n=STAGE_LIST.slice(0,i+1).filter(s=>s[0]===region).length;
-const hm=rank==='boss'?1.4:rank==='elite'?1.2:1;return {name,region,rank,no:`${region+1}-${n}`,hp:Math.round((1100+i*120)*hm/10)*10,base:105+i*6+(rank==='boss'?30:rank==='elite'?15:0)}});
+// enemies are built for a recommended level (1 → 45 over the first 18 stages); [HP, attack, EXP] multipliers per rank.
+// the final boss wants Lv50 with 6 breakthroughs — balance sim (3-member parties, every combo hit parried perfectly): Lv50★6 wins 92–100%, ★5 ~85%, ★4 ~65%, ★0 under 5%
+const RANK_MUL:Record<Rank,number[]>={normal:[1,1,1],elite:[1.25,1.1,1.5],boss:[1.55,1.3,2]},FINAL_MUL=[3.08,2.37,3];
+const STAGES=STAGE_LIST.map(([region,name,rank],i)=>{const n=STAGE_LIST.slice(0,i+1).filter(s=>s[0]===region).length;const final=i===STAGE_LIST.length-1;
+const rec=final?MAX_LV:1+Math.round(i*44/(STAGE_LIST.length-2));const [hm,bm,xm]=final?FINAL_MUL:RANK_MUL[rank];
+return {name,region,rank,no:`${region+1}-${n}`,rec,hp:Math.round(2600*lvMul(rec)*hm/10)*10,base:Math.round(220*lvMul(rec)*bm),exp:Math.round(expNeed(rec)*2*xm),reward:(500+i*50)*(rank==='boss'?3:rank==='elite'?2:1)}});
 const LAST=STAGES.length;
 const bossOf=(c:number)=>STAGES[Math.min(c,LAST-1)];
-const rewardOf=(c:number)=>bossOf(c).rank==='boss'?800:bossOf(c).rank==='elite'?500:300;
+// first-clear diamonds: 500 at 1-1, +50 per stage after; elite ×2, boss ×3
+const rewardOf=(c:number)=>bossOf(c).reward;
 const STARTERS=[2,11,8]; // 유니 · 리코 · 시부키
 const TEST_DIAMONDS=100000; // gacha testing: starting diamonds, and what the shop's + button tops up
-const initial=():Game=>({party:[...STARTERS],lead:2,chapter:0,diamonds:TEST_DIAMONDS,owned:[...STARTERS],history:[],shards:{},pity:{},stars:{},enemyHp:1800,hp:fill(h=>h.hp),sp:5,energy:fill(()=>0),used:[],turn:1,shield:0,intent:'aoe',target:2,screen:'lobby'});
+const initial=():Game=>({party:[...STARTERS],lead:2,chapter:0,fight:0,levels:{},exp:{},diamonds:TEST_DIAMONDS,owned:[...STARTERS],history:[],shards:{},pity:{},stars:{},enemyHp:1800,hp:fill(h=>h.hp),sp:5,energy:fill(()=>0),used:[],turn:1,shield:{},intent:'aoe',target:2,screen:'lobby'});
 const pick=<T,>(a:T[])=>a[Math.floor(Math.random()*a.length)];
 // fills in fields added in later versions (old saves, or state kept across a hot reload)
 const migrate=(raw:Partial<Game>):Game=>{const s={...initial(),...raw} as Game;
 s.owned=(Array.isArray(s.owned)?s.owned:STARTERS).filter(id=>HEROES.some(h=>h.id===id));if(!s.owned.length)s.owned=[...STARTERS];
 s.history=(Array.isArray(s.history)?s.history:[]).filter(p=>p&&typeof p==='object'&&(p.kind==='stone'||HEROES.some(h=>h.id===p.id)));
-s.shards=s.shards||{};s.pity=s.pity||{};s.stars=s.stars||{};if(typeof s.diamonds!=='number')s.diamonds=initial().diamonds;
+s.shards=s.shards||{};s.pity=s.pity||{};s.stars=s.stars||{};s.levels=s.levels||{};s.exp=s.exp||{};if(typeof s.shield!=='object'||!s.shield)s.shield={};
+if(typeof s.fight!=='number'||s.fight>s.chapter||s.fight>=LAST)s.fight=Math.min(s.chapter,LAST-1);if(typeof s.diamonds!=='number')s.diamonds=initial().diamonds;
 s.party=s.party.filter(id=>s.owned.includes(id));if(!s.owned.includes(s.lead))s.lead=s.party[0]??s.owned[0];
 s.hp={...initial().hp,...s.hp};s.energy={...initial().energy,...s.energy};return s};
-const isCurrent=(s:Game)=>Array.isArray(s.owned)&&!!s.pity&&!!s.shards&&!!s.stars&&typeof s.diamonds==='number'&&Array.isArray(s.history)&&s.history.every(p=>typeof p==='object');
+const isCurrent=(s:Game)=>typeof s.shield==='object'&&!!s.shield&&!!s.levels&&!!s.exp&&typeof s.fight==='number'&&Array.isArray(s.owned)&&!!s.pity&&!!s.shards&&!!s.stars&&typeof s.diamonds==='number'&&Array.isArray(s.history)&&s.history.every(p=>typeof p==='object');
 // gacha, tuned like a typical mobile limited banner:
 // member 2% (half of it a pack member), member shards 18%, plain stone (miss) 80%, pity at 70 pulls
 const PULL_COST=160,CHAR_RATE=.02,SHARD_RATE=.18,PACK_SHARE=.5,PITY=70;
@@ -82,7 +93,11 @@ const ACT_MUL:Record<Act,number>={basic:1,skill:2.05,ultimate:3.8},SUPPORT_MUL=.
 const coefOf=(kind:Kind,type:Act,stars:number)=>ACT_MUL[type]*(kind!=='attack'&&type!=='basic'?SUPPORT_MUL:1)*(type==='skill'&&stars>=2?1.15:type==='ultimate'&&stars>=6?1.3:1);
 const pct=(x:number)=>`${Math.round(x*100)}%`;
 const starName=(id:number,s:number)=>RP_STARS[id]?.[s-1]??`${s}단계`;
-const statOf=(v:{stars?:Record<number,number>},id:number)=>{const h=H(id);const s=v.stars?.[id]||0;const m=1+STAR_STAT*s;return {hp:Math.round(h.hp*m),atk:Math.round(h.atk*m),def:Math.round(h.def*m),s}};
+const statOf=(v:{stars?:Record<number,number>;levels?:Record<number,number>},id:number)=>{const h=H(id);const s=v.stars?.[id]||0;const lv=v.levels?.[id]||1;const m=lvMul(lv)*(1+STAR_STAT*s);return {hp:Math.round(h.hp*m),atk:Math.round(h.atk*m),def:Math.round(h.def*m),s,lv,m}};
+// heal / shield amount of a support skill, grown with the caster's level and breakthroughs.
+// shields go on every living ally separately (each absorbs its own hits first), so they are smaller than a party-wide pool would be
+const amtOf=(kind:Kind,type:Act,m:number)=>Math.round((kind==='heal'?(type==='ultimate'?350:190):(type==='ultimate'?170:80))*m);
+const sumShield=(s:Record<number,number>)=>Object.values(s).reduce((a,b)=>a+b,0);
 // one pack per unit; the starting members are left out of their pack
 type Banner={title:string;tag:string;remain:string;pack:number[];color:string;art:string|null};
 const unitPack=(gen:number)=>HEROES.filter(h=>h.gen===gen&&!STARTERS.includes(h.id)).map(h=>h.id);
@@ -99,10 +114,22 @@ if(count+1>=PITY)return {kind:'char',id:b.pack.length?pick(b.pack):pick(HEROES).
 const r=Math.random();
 return r<CHAR_RATE?{kind:'char',id:memberOf(b)}:r<CHAR_RATE+SHARD_RATE?{kind:'shard',id:memberOf(b)}:{kind:'stone',id:0}};
 // the enemy's next move is decided in advance so the UI can preview exactly what it will do
-const enemyHits=(v:Game)=>{const b=bossOf(v.chapter);const enraged=v.enemyHp<b.hp/2;const alive=v.party.filter(id=>v.hp[id]>0);
+// combo = one 600%-attack blow (defense applies once) split into the stage's hit count: 2 at 1-1, +1 every 4 stages, 6 from 3-4.
+// each hit can be parried (perfect → 0, good → 30%, miss → full). balance assumes every hit is parried perfectly;
+// missing them all kills the target. sim vs the final boss at Lv50★6, all perfect: 92–100% wins
+const INTENTS=['aoe','smash','combo'] as const;type Intent=typeof INTENTS[number];
+const COMBO_TOTAL=6,GOOD_TAKEN=.3;
+const comboHitsOf=(i:number)=>Math.min(6,2+Math.floor(i/4));
+// each ring closes over PARRY_MS, the next one PARRY_GAP later; windows are ± around the moment a ring meets its circle
+const PARRY_MS=800,PARRY_GAP=600,PERFECT_MS=70,GOOD_MS=180;
+// where the numbered circles can appear (x%, y%): a 4×3 grid, drawn at random per combo so the order jumps around
+const PARRY_SPOTS=[22,40,58,76].flatMap(x=>[26,44,62].map(y=>[x,y] as [number,number]));
+type ParryRes='perfect'|'good'|'miss';
+const enemyHits=(v:Game)=>{const b=bossOf(v.fight);const enraged=v.enemyHp<b.hp/2;const alive=v.party.filter(id=>v.hp[id]>0);
 const targets=v.intent==='aoe'?alive:alive.includes(v.target)?[v.target]:alive.slice(0,1);
-let shield=v.shield;const hits:Record<number,{dmg:number;blocked:number}>={};
-for(const id of targets){const raw=Math.round((v.intent==='aoe'?b.base:b.base*2.2)*(enraged?1.3:1));const dmg=Math.max(30,raw-statOf(v,id).def);const blocked=Math.min(shield,dmg);shield-=blocked;hits[id]={dmg,blocked}}
+const n=v.intent==='combo'?comboHitsOf(v.fight):1;const mul=v.intent==='aoe'?1:v.intent==='smash'?2.2:COMBO_TOTAL;
+const shield={...v.shield};const hits:Record<number,{dmg:number;blocked:number;per:number}>={};
+for(const id of targets){const per=Math.round(Math.max(30,Math.round(b.base*mul*(enraged?1.3:1))-statOf(v,id).def)/n);const dmg=per*n;const blocked=Math.min(shield[id]||0,dmg);shield[id]=(shield[id]||0)-blocked;hits[id]={dmg,blocked,per}}
 return {hits,shield}};
 const synergyOf=(ids:number[])=>{const n=Math.max(...[1,2,3].map(gen=>ids.filter(id=>H(id).gen===gen).length));return n>=3?3:n>=2?2:0};
 const wait=(ms:number)=>new Promise(r=>setTimeout(r,ms));
@@ -110,7 +137,7 @@ const SHAKE:Keyframe[]=[{transform:'none'},{transform:'translate(-9px,5px)'},{tr
 const anim=(el:Element|null|undefined,k:Keyframe[],ms:number)=>{el?.animate(k,{duration:ms,easing:'ease-out'})};
 let floatId=0;
 const LOADINGS=['/Loading.png'];
-const TIPS=['같은 유닛 멤버를 2명 이상 편성하면 공격력이 올라갑니다.','적의 다음 행동을 확인하고 보호막과 회복으로 대비하세요.','궁극기 게이지는 공격할 때마다 차오릅니다.','기본 공격은 SP를 1 회복합니다. 스킬과 번갈아 쓰세요.','보스의 체력이 절반 아래로 내려가면 광폭화합니다.'];
+const TIPS=['같은 유닛 멤버를 2명 이상 편성하면 공격력이 올라갑니다.','적의 다음 행동을 확인하고 보호막과 회복으로 대비하세요.','궁극기 게이지는 공격할 때마다 차오릅니다.','기본 공격은 SP를 1 회복합니다. 스킬과 번갈아 쓰세요.','보스의 체력이 절반 아래로 내려가면 광폭화합니다.','연속 공격은 번호 순서대로 노란 원이 겹치는 순간 터치하세요. 패리를 놓치면 쓰러질 수 있습니다!','클리어한 스테이지를 다시 골라 경험치를 모을 수 있습니다.','최종 보스는 Lv.50 · 풀돌파 파티를 기준으로 만들어졌습니다.'];
 // story backgrounds per chapter — one shared region image until each region gets its own
 const STORY_BG=['/Region.webp','/Region.webp','/Region.webp'];
 // battle backgrounds per region (null = plain gradient until the art exists)
@@ -176,6 +203,16 @@ const [noGachaArt,setNoGachaArt]=useState<Record<number,boolean>>({});
 const [shieldFx,setShieldFx]=useState<{key:number;type:'up'|'big'|'hit'|'break'}|null>(null);
 const barrier=(type:'up'|'big'|'hit'|'break')=>{const key=Date.now();setShieldFx({key,type});setTimeout(()=>setShieldFx(s=>s&&s.key===key?null:s),1100)};
 const [slash,setSlash]=useState({key:0,type:'basic'});
+// combo parry: all numbered circles show at once; hit k resolves on a tap of circle k (or Space), or as a miss once its good window has passed
+const [parry,setParry]=useState<{key:number;target:number;spots:[number,number][];cur:number;res:ParryRes[]}|null>(null);
+const parryRef=useRef<{at:number;done:(r:ParryRes)=>void}|null>(null);
+const startParry=(target:number,n:number)=>{const pool=[...PARRY_SPOTS];const spots=Array.from({length:n},()=>pool.splice(Math.floor(Math.random()*pool.length),1)[0]);
+setParry({key:++floatId,target,spots,cur:0,res:[]});return performance.now()};
+const waitHit=(k:number,t0:number)=>new Promise<ParryRes>(resolve=>{const at=t0+PARRY_MS+k*PARRY_GAP;
+const done=(r:ParryRes)=>{if(parryRef.current!==entry)return;parryRef.current=null;clearTimeout(t);setParry(p=>p&&{...p,cur:k+1,res:[...p.res,r]});resolve(r)};
+const entry={at,done};parryRef.current=entry;const t=setTimeout(()=>done('miss'),Math.max(0,at+GOOD_MS-performance.now()))});
+const tapParry=()=>{const p=parryRef.current;if(!p)return;const d=Math.abs(performance.now()-p.at);p.done(d<=PERFECT_MS?'perfect':d<=GOOD_MS?'good':'miss')};
+useEffect(()=>{const k=(e:KeyboardEvent)=>{if(e.code==='Space'&&parryRef.current){e.preventDefault();tapParry()}};addEventListener('keydown',k);return()=>removeEventListener('keydown',k)},[]);
 const [toast,setToast]=useState('');
 const [art,setArt]=useState<{cur:number;prev:number|null;n:number}>({cur:2,prev:null,n:0});
 useEffect(()=>{setArt(a=>a.cur===sel?a:{cur:sel,prev:a.cur,n:a.n+1})},[sel]);
@@ -217,38 +254,47 @@ setG({...v,stars:{...v.stars,[id]:s+1},shards:{...v.shards,[id]:v.shards[id]-cos
 const unlockByShards=(id:number)=>{const v=gRef.current;if((v.shards[id]||0)<SHARD_UNLOCK||v.owned.includes(id))return;
 setG({...v,owned:[...v.owned,id],shards:{...v.shards,[id]:v.shards[id]-SHARD_UNLOCK}});say(`${H(id).name} 합류!`)};
 const togglePartyMember=(id:number)=>{if(!g.owned.includes(id))return say('보유하지 않은 멤버입니다');if(!g.party.includes(id)&&g.party.length>=3)return say('파티는 최대 3명입니다');setG(v=>({...v,party:v.party.includes(id)?v.party.filter(x=>x!==id):[...v.party,id]}))};
-const adventure=()=>g.party.length===3?go('story',true):(say('파티 3명을 편성하세요'),go('chars'));
+const adventure=()=>g.party.length===3?(setG(v=>({...v,fight:Math.min(v.chapter,LAST-1)})),go('story',true)):(say('파티 3명을 편성하세요'),go('chars'));
 const pop=(text:string,kind:string,target:'boss'|number)=>{const id=++floatId;const x=target==='boss'?64+(Math.random()*14-7):17.5+32.5*target;const y=target==='boss'?36+(Math.random()*12-6):66;setFloats(f=>[...f,{id,text,kind,x,y}]);setTimeout(()=>setFloats(f=>f.filter(p=>p.id!==id)),1000)};
 const flashBanner=async(t:string,ms=750)=>{setBanner(t);await wait(ms);setBanner('')};
 
 const syn=synergyOf(g.party);const buff=syn===3?1.13:syn===2?1.07:1;
-const boss=bossOf(g.chapter);const rage=g.enemyHp<boss.hp/2;
+const boss=bossOf(g.fight);const rage=g.enemyHp<boss.hp/2;
 const preview=enemyHits(g);
 // preview of the picked action: expected damage on the enemy bar, heal/shield on the party bars
 const pv=(()=>{if(!picked||g.screen!=='battle'||busy)return null;const h=H(picked.id);const st=statOf(g,picked.id);const support=h.kind!=='attack'&&picked.type!=='basic';
-const amt=picked.type==='ultimate'?(h.kind==='heal'?350:420):190;
+const amt=amtOf(h.kind,picked.type,st.m);
 return {dmg:Math.round(st.atk*coefOf(h.kind,picked.type,st.s)*buff),heal:support&&h.kind==='heal'?amt:0,shield:support&&h.kind==='shield'?amt:0}})();
 
 const startBattle=()=>{if(gRef.current.party.length===3)transit(beginBattle)};
-const beginBattle=()=>{const v=gRef.current;const b=bossOf(v.chapter);
-setG({...v,screen:'battle',enemyHp:b.hp,used:[],turn:1,sp:5,shield:0,intent:'aoe',target:pick(v.party),energy:fill(h=>statOf(v,h.id).s>=4?50:0),hp:{...v.hp,...Object.fromEntries(v.party.map(id=>[id,statOf(v,id).hp]))}});
+const beginBattle=()=>{const v=gRef.current;const b=bossOf(v.fight);
+setG({...v,screen:'battle',enemyHp:b.hp,used:[],turn:1,sp:5,shield:{},intent:'aoe',target:pick(v.party),energy:fill(h=>statOf(v,h.id).s>=4?50:0),hp:{...v.hp,...Object.fromEntries(v.party.map(id=>[id,statOf(v,id).hp]))}});
 v.party.forEach(id=>{const i=new Image();i.src=artSrc(id)});
 setSel(v.party[0]);setArt(a=>({cur:v.party[0],prev:null,n:a.n+1}));setCombo(0);setFloats([]);setBusy(false);setTimeout(()=>flashBanner('BATTLE START',900),TILE_OUT_MS)};
 
 const enemyTurn=async()=>{
 const v=gRef.current;
-setCombo(0);setPick(null);await flashBanner('ENEMY TURN',700);
-anim(bossRef.current,[{transform:'none'},{transform:'scale(1.18) translateY(36px)'},{transform:'none'}],450);
-await wait(230);anim(arenaRef.current,SHAKE,450);
+setCombo(0);setPick(null);await flashBanner(v.intent==='combo'?'COMBO ATTACK':'ENEMY TURN',700);
+const lunge=(ms:number)=>anim(bossRef.current,[{transform:'none'},{transform:'scale(1.18) translateY(36px)'},{transform:'none'}],ms);
+const hurt=(id:number)=>anim(heroRefs.current[id],[{filter:'brightness(1.8) sepia(1) hue-rotate(-50deg) saturate(6)',transform:'translateX(-7px)'},{transform:'translateX(6px)'},{filter:'none',transform:'none'}],420);
+const {hits}=enemyHits(v);const hp={...v.hp};let shield={...v.shield};
+if(v.intent==='combo'){const id=+Object.keys(hits)[0];const idx=v.party.indexOf(id);
+const n=comboHitsOf(v.fight);const t0=startParry(id,n);
+for(let k=0;k<n&&hp[id]>0;k++){const r=await waitHit(k,t0);lunge(300);
+const d=r==='perfect'?0:r==='good'?Math.round(hits[id].per*GOOD_TAKEN):hits[id].per;const bl=Math.min(shield[id]||0,d);shield={...shield,[id]:(shield[id]||0)-bl};hp[id]=Math.max(0,hp[id]-d+bl);
+pop(`${r==='perfect'?'PERFECT':r==='good'?'GOOD':'MISS'}\n${d-bl>0?`-${d-bl}`:'0'}${bl?` 🛡${bl}`:''}`,r==='perfect'?'shield':'hurt',idx);
+if(bl)barrier(shield[id]<=0?'break':'hit');if(d>bl){hurt(id);anim(arenaRef.current,SHAKE,r==='miss'?380:220)}}
+parryRef.current=null;await wait(500);setParry(null)}
+else{lunge(450);await wait(230);anim(arenaRef.current,SHAKE,450);
 anim(artRef.current,[{filter:'brightness(1.6) sepia(1) hue-rotate(-50deg) saturate(5)',transform:'translateX(-6%)'},{transform:'translateX(2%)'},{filter:'none',transform:'none'}],450);
-const {hits,shield}=enemyHits(v);const hp={...v.hp};
-if(v.shield>0&&shield<v.shield)barrier(shield<=0?'break':'hit');
+shield=enemyHits(v).shield;
+const hitIds=Object.keys(hits).map(Number).filter(id=>hits[id].blocked>0);
+if(hitIds.length)barrier(hitIds.some(id=>shield[id]<=0)?'break':'hit');
 for(const [k,{dmg,blocked}] of Object.entries(hits)){const id=+k;hp[id]=Math.max(0,hp[id]-dmg+blocked);
-pop(blocked?`-${dmg-blocked}\n🛡${blocked}`:`-${dmg}`,'hurt',v.party.indexOf(id));
-anim(heroRefs.current[id],[{filter:'brightness(1.8) sepia(1) hue-rotate(-50deg) saturate(6)',transform:'translateX(-7px)'},{transform:'translateX(6px)'},{filter:'none',transform:'none'}],420)}
+pop(blocked?`-${dmg-blocked}\n🛡${blocked}`:`-${dmg}`,'hurt',v.party.indexOf(id));hurt(id)}}
 const lost=v.party.every(id=>hp[id]<=0);
 const survivors=v.party.filter(id=>hp[id]>0);
-setG({...v,hp,shield,turn:v.turn+1,sp:Math.min(6,v.sp+3),used:[],intent:Math.random()<.5?'aoe':'smash',target:survivors.length?pick(survivors):v.target,screen:lost?'defeat':'battle'});
+setG({...v,hp,shield,turn:v.turn+1,sp:Math.min(6,v.sp+3),used:[],intent:pick([...INTENTS]),target:survivors.length?pick(survivors):v.target,screen:lost?'defeat':'battle'});
 if(lost)return;
 await wait(450);setSel(v.party.find(id=>hp[id]>0)!);await flashBanner(`TURN ${v.turn+1}`,650)};
 
@@ -271,9 +317,10 @@ if(type!=='basic'||crit)anim(arenaRef.current,SHAKE,type==='ultimate'?520:300);
 setSlash(s=>({key:s.key+1,type}));
 pop(crit?`CRITICAL\n${dmg}`:`${dmg}`,crit?'crit':type==='ultimate'?'crit':'dmg','boss');
 setCombo(c=>c+1);
-const hp={...v.hp};let shield=v.shield;
-if(support&&hero.kind==='heal'){const amt=type==='ultimate'?350:190;v.party.forEach((id,i)=>{if(hp[id]>0){hp[id]=Math.min(statOf(v,id).hp,hp[id]+amt);pop(`+${amt}`,'heal',i)}})}
-if(support&&hero.kind==='shield'){const amt=type==='ultimate'?420:190;shield+=amt;barrier(type==='ultimate'?'big':'up');v.party.forEach((id,i)=>hp[id]>0&&pop(`🛡+${amt}`,'shield',i))}
+const hp={...v.hp};const shield={...v.shield};
+const amt=amtOf(hero.kind,type,st.m);
+if(support&&hero.kind==='heal'){v.party.forEach((id,i)=>{if(hp[id]>0){hp[id]=Math.min(statOf(v,id).hp,hp[id]+amt);pop(`+${amt}`,'heal',i)}})}
+if(support&&hero.kind==='shield'){barrier(type==='ultimate'?'big':'up');v.party.forEach((id,i)=>{if(hp[id]>0){shield[id]=(shield[id]||0)+amt;pop(`🛡+${amt}`,'shield',i)}})}
 const enemyHp=Math.max(0,v.enemyHp-dmg);const used=[...v.used,who];
 setG({...v,hp,shield,enemyHp,used,sp:Math.min(6,v.sp-(type==='skill'?2:0)+(type==='basic'?1:0)),energy:{...v.energy,[who]:type==='ultimate'?0:Math.min(100,v.energy[who]+(type==='basic'?35:25))}});
 if(enemyHp===0){anim(bossRef.current,[{opacity:1,filter:'brightness(1)'},{opacity:0,filter:'brightness(4)',transform:'scale(1.3)'}],700);await wait(800);go('victory');setBusy(false);return}
@@ -281,10 +328,14 @@ const next=v.party.find(id=>!used.includes(id)&&hp[id]>0);
 if(next){await wait(250);setSel(next);setBusy(false);return}
 await wait(550);await enemyTurn();setBusy(false)};
 
-const finish=()=>transit(()=>setG(v=>({...v,chapter:Math.min(LAST,v.chapter+1),diamonds:v.diamonds+rewardOf(v.chapter),screen:v.chapter>=LAST-1?'lobby':'story'})));
-const stage=bossOf(g.chapter);const done=g.chapter>=LAST;
+// a first clear advances the story and pays diamonds; a replay only gives EXP and stays on that stage
+const finish=()=>transit(()=>setG(v=>{const first=v.fight===v.chapter;const st=bossOf(v.fight);const levels={...v.levels},exp={...v.exp};
+v.party.forEach(id=>{[levels[id],exp[id]]=addExp(levels[id]||1,exp[id]||0,st.exp)});const chapter=first?Math.min(LAST,v.chapter+1):v.chapter;
+return {...v,levels,exp,chapter,fight:first?Math.min(chapter,LAST-1):v.fight,diamonds:v.diamonds+(first?rewardOf(v.fight):0),screen:first&&v.chapter>=LAST-1?'lobby':'story'}}));
+const stage=bossOf(g.fight);const prog=bossOf(g.chapter);const done=g.chapter>=LAST;const replay=g.fight!==g.chapter;
 const regionStages=STAGES.map((s,i)=>({...s,i})).filter(s=>s.region===stage.region);
-const firstOfRegion=regionStages[0].i===Math.min(g.chapter,LAST-1);
+const firstOfRegion=regionStages[0].i===g.fight;
+const pickStage=(i:number)=>setG(v=>({...v,fight:Math.min(i,v.chapter,LAST-1)}));
 const stars=g.turn<=4?3:g.turn<=7?2:1;
 const chapterInfo=CHAPTERS[stage.region];
 
@@ -300,7 +351,7 @@ return <main className="phone">
 {g.screen==='lobby'&&<section className="screen lobby">
 <div className="lobbyBg"/>
 <header className="hud">
-<div className="profile"><Portrait id={g.lead}/><div><b>Lv.{12+g.chapter} 마스터</b><small>{done?'데모 클리어':`스테이지 ${stage.no} 진행 중`}</small></div></div>
+<div className="profile"><Portrait id={g.lead}/><div><b>Lv.{12+g.chapter} 마스터</b><small>{done?'데모 클리어':`스테이지 ${prog.no} 진행 중`}</small></div></div>
 <Diamonds/>
 </header>
 <div className="sideMenu">
@@ -314,7 +365,7 @@ return <main className="phone">
 </div>
 <div className="lobbyActions">
 <button className="partyBtn" onClick={()=>go('chars')}><div className="partyFaces">{g.party.map(id=><Portrait key={id} id={id}/>)}</div><span>파티 편성</span></button>
-<button className="adventure" onClick={adventure}><small>{done?'데모 완료 · 다시 도전':`${stage.no} · ${stage.name}`}</small><b>모험 시작</b><Swords size={26} className="advIcon"/></button>
+<button className="adventure" onClick={adventure}><small>{done?'데모 완료 · 다시 도전':`${prog.no} · ${prog.name}`}</small><b>모험 시작</b><Swords size={26} className="advIcon"/></button>
 </div>
 {done&&<div className="clearBadge"><Crown size={14}/> 데모 스토리 완료!</div>}
 <NavBar/>
@@ -327,7 +378,7 @@ return <main className="phone">
 </div>
 <div className="tabs">{['전체',...UNIT.slice(1)].map((t,i)=><button key={t} className={genTab===i?'on':''} onClick={()=>setGenTab(i)}>{t}</button>)}</div>
 <div className="grid">{shown.map(h=>{const K=KIND[h.kind].Icon;const inParty=g.party.includes(h.id);const locked=!g.owned.includes(h.id);return <button key={h.id} className={`card ${inParty?'picked':''} ${locked?'locked':''}`} style={{'--c':GEN_COLOR[h.gen]} as React.CSSProperties} onClick={()=>openDetail(h.id)}>
-{noGachaArt[h.id]?<Portrait id={h.id}/>:<img className="cardArt" src={gachaSrc(h.id)} alt={`${h.name} 이미지`} draggable={false} loading="lazy" style={cardCrop(h.id)} onError={()=>setNoGachaArt(m=>({...m,[h.id]:true}))}/>}<span className="genTag">{UNIT[h.gen]}</span>{(g.stars[h.id]||0)>0&&<span className="cardStars">{'★'.repeat(g.stars[h.id])}</span>}{inParty&&<span className="checkTag"><Check size={12}/>{g.party.indexOf(h.id)+1}</span>}
+{noGachaArt[h.id]?<Portrait id={h.id}/>:<img className="cardArt" src={gachaSrc(h.id)} alt={`${h.name} 이미지`} draggable={false} loading="lazy" style={cardCrop(h.id)} onError={()=>setNoGachaArt(m=>({...m,[h.id]:true}))}/>}<span className="genTag">{UNIT[h.gen]}</span>{(g.stars[h.id]||0)>0&&<span className="cardStars">{'★'.repeat(g.stars[h.id])}</span>}{!locked&&<span className="cardLv">Lv.{g.levels[h.id]||1}</span>}{inParty&&<span className="checkTag"><Check size={12}/>{g.party.indexOf(h.id)+1}</span>}
 {locked&&<span className="lockTag"><Lock size={22}/><small>미보유</small></span>}
 <div className="cardInfo"><K size={12}/><b>{h.name}</b><small>{h.job}</small></div></button>})}</div>
 <div className="ctaBar"><button className="primary" disabled={g.party.length!==3} onClick={()=>go('story',true)}>{g.party.length===3?'편성 완료 · 모험으로':`${3-g.party.length}명 더 선택하세요`}<ChevronRight size={18}/></button></div>
@@ -371,7 +422,7 @@ return <main className="phone">
 <div className="tier shard"><b>멤버 조각 ×{SHARD_DROP}</b><span>{(SHARD_RATE*100).toFixed(1)}%</span><small>{bn.pack.length?`${bn.title} 멤버 조각 ${(SHARD_RATE*PACK_SHARE*100).toFixed(1)}%`:'전체 멤버 균등'} · 조각 {SHARD_UNLOCK}개로 멤버 교환</small></div>
 <div className="tier stone"><b>평범한 돌 (꽝)</b><span>{((1-CHAR_RATE-SHARD_RATE)*100).toFixed(1)}%</span><small>아무 효과 없음</small></div>
 </div>
-<p className="modalNote">천장: {PITY}회째 모집에서 {bn.pack.length?`${bn.title} 멤버`:'멤버'} 확정 (획득 시 초기화) · 보유 멤버 중복 시 1돌파 (6돌파 이후 조각 ×{DUP_SHARDS}) · 1회 <Gem size={11}/>{PULL_COST} · 스테이지 클리어 <Gem size={11}/>300 (정예 500 · 보스 800)</p></>
+<p className="modalNote">천장: {PITY}회째 모집에서 {bn.pack.length?`${bn.title} 멤버`:'멤버'} 확정 (획득 시 초기화) · 보유 멤버 중복 시 1돌파 (6돌파 이후 조각 ×{DUP_SHARDS}) · 1회 <Gem size={11}/>{PULL_COST} · 스테이지 첫 클리어 <Gem size={11}/>500부터 스테이지마다 +50 (정예 ×2 · 보스 ×3)</p></>
 :shopModal==='history'?<><h3>모집 기록 <small>최근 {g.history.length}회</small></h3>{g.history.length?<div className="historyList">{g.history.map((p,i)=><div key={i} className={p.kind} style={{'--c':p.kind==='stone'?'#6b7390':GEN_COLOR[H(p.id).gen]} as React.CSSProperties}>{p.kind==='stone'?<i className="stoneIcon"/>:<Portrait id={p.id}/>}<span>{p.kind==='stone'?'돌':p.kind==='shard'?`${H(p.id).name.split(' ').pop()} 조각`:H(p.id).name.split(' ').pop()}</span></div>)}</div>:<p className="modalNote">아직 모집 기록이 없습니다.</p>}</>
 :<><h3>조각 교환 <small>조각 {SHARD_UNLOCK}개 → 멤버 합류</small></h3><div className="shardList">{HEROES.map(h=>{const n=g.shards[h.id]||0;const own=g.owned.includes(h.id);return <div key={h.id} className={own?'own':''} style={{'--c':GEN_COLOR[h.gen]} as React.CSSProperties}>
 <Portrait id={h.id}/><div className="shardInfo"><b>{h.name}</b><div className="statBar"><i style={{width:`${Math.min(100,100*n/SHARD_UNLOCK)}%`}}/></div><small>{n} / {SHARD_UNLOCK}</small></div>
@@ -410,14 +461,15 @@ return <>
 <p className="btNote">중복 멤버를 뽑으면 자동으로 1돌파 · 6돌파 이후 중복은 조각 ×{DUP_SHARDS}</p>
 </div></>})():<div className="hvPanel" key="info">
 <p className="bio">{d.bio}</p>
-{(()=>{const st=statOf(g,d.id);const top=1+STAR_STAT*MAX_STARS;return <div className="stats">{([['HP',st.hp,d.hp,1200],['공격',st.atk,d.atk,185],['방어',st.def,d.def,90]] as const).map(([l,val,base,max])=><div key={l}><span>{l}</span><div className="statBar"><i style={{width:`${100*val/(max*top)}%`}}/></div><b>{val}{val>base&&<small className="statUp">+{val-base}</small>}</b></div>)}</div>})()}
+{(()=>{const st=statOf(g,d.id);const need=expNeed(st.lv);const ex=g.exp[d.id]||0;return <div className="lvRow"><b>Lv.{st.lv}<small>/{MAX_LV}</small></b><div className="statBar"><i style={{width:`${st.lv>=MAX_LV?100:100*ex/need}%`}}/></div><small>{st.lv>=MAX_LV?'MAX':`EXP ${ex} / ${need}`}</small></div>})()}
+{(()=>{const st=statOf(g,d.id);const top=(1+STAR_STAT*MAX_STARS)*lvMul(st.lv);return <div className="stats">{([['HP',st.hp,d.hp,1200],['공격',st.atk,d.atk,185],['방어',st.def,d.def,90]] as const).map(([l,val,base,max])=><div key={l}><span>{l}</span><div className="statBar"><i style={{width:`${100*val/(max*top)}%`}}/></div><b>{val}{val>base&&<small className="statUp">+{val-base}</small>}</b></div>)}</div>})()}
 {(()=>{const s=g.stars[d.id]||0;return <button className="rpLink" onClick={()=>setDetailTab('rp')}><b>RP 강화</b><span className="btStars">{Array.from({length:MAX_STARS},(_,i)=><Star key={i} size={13} className={i<s?'on':''}/>)}</span><small>{s}/{MAX_STARS}</small><ChevronRight size={16}/></button>})()}
-{(()=>{const s=g.stars[d.id]||0;const line=(type:Act,heal:number,shield:number)=>{const c=coefOf(d.kind,type,s),base=coefOf(d.kind,type,0);
+{(()=>{const {s,m}=statOf(g,d.id);const line=(type:Act)=>{const heal=amtOf('heal',type,m),shield=amtOf('shield',type,m);const c=coefOf(d.kind,type,s),base=coefOf(d.kind,type,0);
 const dmg=<>피해계수 <b className="coef">{pct(c)}</b>{c>base&&<small className="statUp">돌파 +{pct(c-base)}</small>}</>;
-return d.kind==='attack'||type==='basic'?<>적에게 {dmg}</>:d.kind==='heal'?<>아군 전체 HP {heal} 회복 · {dmg}</>:<>파티 보호막 {shield} · {dmg}</>};
-return <><div className="skillInfo basic"><Swords size={18}/><div><b>기본 공격 <small>SP +1</small></b><p>{line('basic',0,0)}</p></div></div>
-<div className="skillInfo"><Flame size={18}/><div><b>{d.skill} <small>SP 2</small></b><p>{line('skill',190,190)}</p></div></div>
-<div className="skillInfo ult"><Sparkles size={18}/><div><b>{d.ultimate} <small>궁극기</small></b><p>{line('ultimate',350,420)}</p></div></div></>})()}
+return d.kind==='attack'||type==='basic'?<>적에게 {dmg}</>:d.kind==='heal'?<>아군 전체 HP {heal} 회복 · {dmg}</>:<>아군 각각 보호막 {shield} · {dmg}</>};
+return <><div className="skillInfo basic"><Swords size={18}/><div><b>기본 공격 <small>SP +1</small></b><p>{line('basic')}</p></div></div>
+<div className="skillInfo"><Flame size={18}/><div><b>{d.skill} <small>SP 2</small></b><p>{line('skill')}</p></div></div>
+<div className="skillInfo ult"><Sparkles size={18}/><div><b>{d.ultimate} <small>궁극기</small></b><p>{line('ultimate')}</p></div></div></>})()}
 {g.owned.includes(d.id)?<div className="sheetActions">
 <button className="secondary" disabled={g.lead===d.id} onClick={()=>{setG(v=>({...v,lead:d.id}));say('대표 캐릭터로 설정했습니다')}}><Crown size={16}/>{g.lead===d.id?'대표 캐릭터':'대표로 설정'}</button>
 {g.screen==='chars'&&<button className="primary" onClick={()=>{togglePartyMember(d.id);setDetail(null)}}>{g.party.includes(d.id)?'파티에서 해제':'파티 편성'}</button>}
@@ -429,18 +481,18 @@ return <><div className="skillInfo basic"><Swords size={18}/><div><b>기본 공�
 {g.screen==='story'&&<section className="screen story">
 <TopBack title={chapterInfo.title}/>
 <div className="storyBg" key={stage.region}><div className="loadBlur" style={{backgroundImage:`url(${STORY_BG[stage.region]})`}}/><div className="loadImg" style={{backgroundImage:`url(${STORY_BG[stage.region]})`}}/></div>
-<div className="stageStrip">{regionStages.map(s=><div key={s.i} className={`stageNode ${s.rank} ${s.i<g.chapter?'clear':''} ${s.i===Math.min(g.chapter,LAST-1)?'now':''}`}>
-<img src={`/monsters/${encodeURIComponent(s.name)}.png`} alt="" draggable={false}/>{s.i<g.chapter&&<i className="clearMark"><Check size={12}/></i>}<small>{s.no}</small></div>)}</div>
+<div className="stageStrip">{regionStages.map(s=><button key={s.i} className={`stageNode ${s.rank} ${s.i<g.chapter?'clear':''} ${s.i===g.fight?'now':''}`} disabled={s.i>g.chapter} onClick={()=>pickStage(s.i)} aria-label={`${s.no} ${s.name}`}>
+<img src={`/monsters/${encodeURIComponent(s.name)}.png`} alt="" draggable={false}/>{s.i<g.chapter&&<i className="clearMark"><Check size={12}/></i>}<small>{s.no}</small></button>)}</div>
 <div className="storyScene"><div className="dialogue"><span className="speaker">{firstOfRegion?chapterInfo.npc:`STAGE ${stage.no}`}</span>
 <p>{firstOfRegion?chapterInfo.line:stage.rank==='boss'?`“이 지역의 주인, ${stage.name}이(가) 모습을 드러냈다!”`:stage.rank==='elite'?`“강한 기운이 느껴진다… ${stage.name}이다!”`:`“${stage.name}이(가) 길을 막고 있다!”`}</p>
-<small>{firstOfRegion?chapterInfo.text:`${stage.rank==='boss'?'보스':stage.rank==='elite'?'정예':'일반'} · HP ${stage.hp.toLocaleString()} · 클리어 보상 💎${rewardOf(g.chapter)}`}</small></div></div>
+<small>{firstOfRegion?chapterInfo.text:`${stage.rank==='boss'?'보스':stage.rank==='elite'?'정예':'일반'} · 권장 Lv.${stage.rec}${g.fight===LAST-1?' · 풀돌파':''} · HP ${stage.hp.toLocaleString()} · EXP ${stage.exp.toLocaleString()}${replay?' · 다시 도전':` · 💎${rewardOf(g.fight)}`}`}</small></div></div>
 <div className="ctaBar row"><button className="secondary" onClick={()=>go('map')}><MapIcon size={16}/>지도</button><button className="primary" onClick={startBattle}><Swords size={18}/>{stage.rank==='boss'?(stage.region===2?'최종 보스 도전':'보스 도전'):'전투 시작'}</button></div>
 </section>}
 
 {g.screen==='map'&&<section className="screen map">
 <TopBack title="별빛의 대륙"/>
-<div className="mapPath">{REGION_MAP.map((x,i)=>{const list=STAGES.filter(s=>s.region===i);const cleared=STAGES.filter((s,k)=>s.region===i&&k<g.chapter).length;const open=stage.region>=i;
-return <button key={x.name} className={`mapNode ${open?'open':''} ${!done&&stage.region===i?'now':''}`} disabled={!open} onClick={()=>go('story')}><span>{x.icon}</span><b>{x.name}</b><small>{!open?'잠김':cleared>=list.length?'클리어':`${cleared} / ${list.length} 스테이지`}</small></button>})}</div>
+<div className="mapPath">{REGION_MAP.map((x,i)=>{const list=STAGES.filter(s=>s.region===i);const cleared=STAGES.filter((s,k)=>s.region===i&&k<g.chapter).length;const open=prog.region>=i;
+return <button key={x.name} className={`mapNode ${open?'open':''} ${!done&&prog.region===i?'now':''}`} disabled={!open} onClick={()=>{pickStage(prog.region===i?g.chapter:STAGES.findLastIndex(s=>s.region===i));go('story')}}><span>{x.icon}</span><b>{x.name}</b><small>{!open?'잠김':cleared>=list.length?'클리어':`${cleared} / ${list.length} 스테이지`}</small></button>})}</div>
 <NavBar/>
 </section>}
 
@@ -451,13 +503,13 @@ return <button key={x.name} className={`mapNode ${open?'open':''} ${!done&&stage
 <button className="iconRound" disabled={busy} onClick={()=>confirm('전투를 포기하고 로비로 돌아갈까요?')&&go('lobby')} aria-label="전투 포기"><ChevronLeft size={20}/></button>
 <div className="turnTag">TURN<b>{g.turn}</b></div>
 <div className="spBox"><div className="spRow"><span>SP</span><div className="pips">{[0,1,2,3,4,5].map(i=><i key={i} className={i<g.sp?'on':''}/>)}</div></div>
-<div className="spRow"><span className="shieldTxt"><Shield size={12}/>{g.shield}</span><span className="synTxt"><Sparkles size={12}/>{syn?`ATK +${syn===3?13:7}%`:'시너지 없음'}</span></div></div>
+<div className="spRow"><span className="shieldTxt"><Shield size={12}/>{sumShield(g.shield)}</span><span className="synTxt"><Sparkles size={12}/>{syn?`ATK +${syn===3?13:7}%`:'시너지 없음'}</span></div></div>
 </div>
 <div className="bRight">
 <div className="stageTag">STAGE <b>{stage.no}</b></div>
 <div className="bossBar"><div className="bossLabel"><i className={`bossTag ${stage.rank}`}>{stage.rank==='boss'?'BOSS':stage.rank==='elite'?'ELITE':'ENEMY'}</i><b>{boss.name}</b>{rage&&<em>광폭화</em>}{pv&&pv.dmg>0&&<em className="prevNum">예상 -{pv.dmg.toLocaleString()}</em>}<span>{g.enemyHp.toLocaleString()} / {boss.hp.toLocaleString()}</span></div>
 <div className="bar"><i className="ghost" style={{width:`${100*g.enemyHp/boss.hp}%`}}/><i className="fill" style={{width:`${100*g.enemyHp/boss.hp}%`}}/>{pv&&pv.dmg>0&&<i className="dmgPrev" style={{left:`${100*Math.max(0,g.enemyHp-pv.dmg)/boss.hp}%`,width:`${100*Math.min(g.enemyHp,pv.dmg)/boss.hp}%`}}/>}</div></div>
-<div className={`intent ${g.intent}`} key={`${g.turn}-${g.intent}-${g.target}`}>{g.intent==='aoe'?<Users size={13}/>:<Crosshair size={13}/>}<span>다음 행동</span><b>{g.intent==='aoe'?'광역 공격':'강타'}</b><ChevronRight size={12}/><b>{g.intent==='aoe'?'파티 전체':H(g.target).name}</b>{Object.keys(preview.hits).length>0&&<em>총 -{Object.values(preview.hits).reduce((s,x)=>s+x.dmg-x.blocked,0)}</em>}</div>
+<div className={`intent ${g.intent}`} key={`${g.turn}-${g.intent}-${g.target}`}>{g.intent==='aoe'?<Users size={13}/>:g.intent==='combo'?<Zap size={13}/>:<Crosshair size={13}/>}<span>다음 행동</span><b>{g.intent==='aoe'?'광역 공격':g.intent==='combo'?`연속 공격 ×${comboHitsOf(g.fight)}`:'강타'}</b><ChevronRight size={12}/><b>{g.intent==='aoe'?'파티 전체':H(g.target).name}</b>{Object.keys(preview.hits).length>0&&<em>총 -{Object.values(preview.hits).reduce((s,x)=>s+x.dmg-x.blocked,0)}</em>}</div>
 </div>
 </header>
 <div className="arena" ref={arenaRef}>
@@ -481,11 +533,11 @@ return <button key={x.name} className={`mapNode ${open?'open':''} ${!done&&stage
 </div>
 <div className="allyRow">{g.party.map(id=>{const h=H(id);const e=g.energy[id]||0;const off=busy||g.screen!=='battle'||g.used.includes(id)||g.hp[id]<=0;
 const hit=g.screen==='battle'?preview.hits[id]:undefined;const loss=hit?Math.min(g.hp[id],hit.dmg-hit.blocked):0;const after=g.hp[id]-loss;const ko=!!hit&&after<=0;
-return <div key={id} ref={el=>{heroRefs.current[id]=el}} className={`ally ${sel===id?'active':''} ${g.used.includes(id)?'acted':''} ${g.hp[id]<=0?'down':''} ${hit?'targeted':''} ${ko?'ko':''}`} style={{'--c':GEN_COLOR[h.gen]} as React.CSSProperties}>
-<button className="allyFace" disabled={busy||g.hp[id]<=0} onClick={()=>setSel(id)} aria-label={`${h.name} 선택`}><Portrait id={id}/>{hit&&<i className="targetMark"><Crosshair size={14}/></i>}{g.used.includes(id)&&<i className="doneTag">행동 완료</i>}</button>
+return <div key={id} ref={el=>{heroRefs.current[id]=el}} className={`ally ${sel===id?'active':''} ${g.used.includes(id)?'acted':''} ${g.hp[id]<=0?'down':''} ${hit?'targeted':''} ${ko?'ko':''} ${e>=100&&g.hp[id]>0?'ultReady':''}`} style={{'--c':GEN_COLOR[h.gen]} as React.CSSProperties}>
+<button className="allyFace" disabled={busy||g.hp[id]<=0} onClick={()=>setSel(id)} aria-label={`${h.name} 선택`}><Portrait id={id}/>{hit&&<i className="targetMark"><Crosshair size={14}/></i>}{e>=100&&g.hp[id]>0&&<i className="ultBadge"><Sparkles size={10}/>ULT</i>}{g.used.includes(id)&&<i className="doneTag">행동 완료</i>}</button>
 <div className="allyBody">
-<div className="allyHead"><b>{h.name}</b>{g.shield>0&&g.hp[id]>0&&<em className="shieldPill"><Shield size={10}/>{g.shield}</em>}{pv&&pv.heal>0&&g.hp[id]>0&&g.hp[id]<statOf(g,id).hp&&<em className="gainPill">+{Math.min(pv.heal,statOf(g,id).hp-g.hp[id])}</em>}{pv&&pv.shield>0&&g.hp[id]>0&&<em className="shieldPill add"><Shield size={10}/>+{pv.shield}</em>}{hit&&<em className="dmgPreview">{ko?<><Skull size={10}/>전투불능 </>:''}{loss>0?`-${loss}`:'완전 방어'}{hit.blocked>0&&<small>🛡{hit.blocked}</small>}</em>}<span>{hit?<>{g.hp[id]}<ChevronRight size={9}/>{after}</>:g.hp[id]}</span></div>
-{(()=>{const mx=statOf(g,id).hp;const cur=g.hp[id];const gain=pv&&pv.heal>0&&cur>0?Math.min(pv.heal,mx-cur):0;const sh=g.hp[id]>0?g.shield:0;const add=pv&&cur>0?pv.shield:0;
+<div className="allyHead"><small className="lvTag">Lv.{g.levels[id]||1}</small><b>{h.name}</b>{(g.shield[id]||0)>0&&g.hp[id]>0&&<em className="shieldPill"><Shield size={10}/>{g.shield[id]}</em>}{pv&&pv.heal>0&&g.hp[id]>0&&g.hp[id]<statOf(g,id).hp&&<em className="gainPill">+{Math.min(pv.heal,statOf(g,id).hp-g.hp[id])}</em>}{pv&&pv.shield>0&&g.hp[id]>0&&<em className="shieldPill add"><Shield size={10}/>+{pv.shield}</em>}{hit&&<em className="dmgPreview">{ko?<><Skull size={10}/>전투불능 </>:''}{loss>0?`-${loss}`:'완전 방어'}{hit.blocked>0&&<small>🛡{hit.blocked}</small>}</em>}<span>{hit?<>{g.hp[id]}<ChevronRight size={9}/>{after}</>:g.hp[id]}</span></div>
+{(()=>{const mx=statOf(g,id).hp;const cur=g.hp[id];const gain=pv&&pv.heal>0&&cur>0?Math.min(pv.heal,mx-cur):0;const sh=g.hp[id]>0?(g.shield[id]||0):0;const add=pv&&cur>0?pv.shield:0;
 return <div className="hpWrap"><div className="hp"><i style={{width:`${100*after/mx}%`}}/>{loss>0&&<i className="loss" style={{left:`${100*after/mx}%`,width:`${100*loss/mx}%`}}/>}{gain>0&&<i className="gain" style={{left:`${100*cur/mx}%`,width:`${100*gain/mx}%`}}/>}</div>
 {(sh>0||add>0||shieldFx?.type==="break")&&<div className={`shieldBar ${shieldFx?.type??""}`} key={shieldFx?.key??"s"}><i style={{width:`${Math.min(100,100*sh/mx)}%`}}/>{add>0&&<i className="add" style={{left:`${Math.min(100,100*sh/mx)}%`,width:`${Math.min(100-Math.min(100,100*sh/mx),100*add/mx)}%`}}/>}</div>}</div>})()}
 <div className="allySkills">
@@ -497,7 +549,7 @@ return <div className="hpWrap"><div className="hp"><i style={{width:`${100*after
 const est=Math.round(st.atk*c*buff);const ok=canUse(picked.type,picked.id);const e=g.energy[picked.id]||0;
 const name=picked.type==='basic'?'기본 공격':picked.type==='skill'?h.skill:h.ultimate;
 const Icon=picked.type==='basic'?Swords:picked.type==='skill'?Flame:Sparkles;
-const support=h.kind!=='attack'&&picked.type!=='basic';const amt=picked.type==='ultimate'?(h.kind==='heal'?350:420):190;
+const support=h.kind!=='attack'&&picked.type!=='basic';const amt=amtOf(h.kind,picked.type,st.m);
 const reason=g.used.includes(picked.id)?'이미 행동했습니다':picked.type==='skill'&&g.sp<2?`SP가 부족합니다 (${g.sp}/2)`:picked.type==='ultimate'&&e<100?`궁극기 게이지 ${e}%`:'';
 return <div className={`skillPop ${picked.type} col${g.party.indexOf(picked.id)}`} key={picked.id+picked.type} style={{'--c':GEN_COLOR[h.gen]} as React.CSSProperties}>
 <div className="spHead"><Icon size={18}/><div><b>{name}</b><small>{h.name.split(' ').pop()} · {picked.type==='basic'?'기본 공격':picked.type==='skill'?'스킬':'궁극기'}</small></div>
@@ -505,14 +557,20 @@ return <div className={`skillPop ${picked.type} col${g.party.indexOf(picked.id)}
 <ul className="spBody">
 <li><span>피해계수</span><b>{pct(c)}</b><small>예상 피해 약 {est.toLocaleString()}{syn?` (시너지 포함)`:''}</small></li>
 {support&&h.kind==='heal'&&<li><span>회복</span><b>아군 전체 +{amt}</b></li>}
-{support&&h.kind==='shield'&&<li><span>보호막</span><b>파티 +{amt}</b><small>현재 {g.shield}</small></li>}
+{support&&h.kind==='shield'&&<li><span>보호막</span><b>아군 각각 +{amt}</b></li>}
 <li><span>게이지</span><b>{picked.type==='ultimate'?'궁극기 게이지 소모':`궁극기 +${picked.type==='basic'?35:25}%`}</b></li>
 </ul>
 <div className="spActions"><button className="secondary" onClick={()=>setPick(null)}>취소</button>
 <button className="primary" disabled={!ok} onClick={()=>{setPick(null);act(picked.type,picked.id)}}>{ok?<>사용<ChevronRight size={15}/></>:reason}</button></div>
 </div>})()}
+{parry&&<div className="parry" key={parry.key}>
+<small className="parryHint">{H(parry.target).name.split(' ').pop()}에게 연속 공격! 번호 순서대로, 노란 원이 겹칠 때 터치</small>
+{parry.spots.map(([x,y],k)=>{const r=parry.res[k];return <button key={k} className={`parryDot ${r??''} ${k===parry.cur?'cur':''}`} style={{left:`${x}%`,top:`${y}%`,'--d':`${k*PARRY_GAP}ms`,'--ms':`${PARRY_MS}ms`} as React.CSSProperties} onPointerDown={()=>{if(k===parry.cur)tapParry()}} aria-label={`패리 ${k+1}`}>
+<i className="parryRing"/><b>{r?(r==='perfect'?'PERFECT':r==='good'?'GOOD':'MISS'):k+1}</b></button>})}</div>}
 {cutin&&<div className="cutin"><div className="stripe"/><BattleArt id={cutin.id} className="cutArt"/><div className="cutText"><small>ULTIMATE</small><b>{cutin.ultimate}</b></div></div>}
-{g.screen==='victory'&&<div className="result win"><div className="stars">{[1,2,3].map(i=><Star key={i} size={44} className={i<=stars?'on':''} style={{animationDelay:`${i*.18}s`}}/>)}</div><h2>VICTORY</h2><p>{g.turn}턴 클리어 · 보상 <Gem size={14} color="#ff8ad8"/> {rewardOf(g.chapter)}</p><button className="primary" onClick={finish}>{g.chapter>=LAST-1?'엔딩으로':stage.rank==='boss'?'다음 지역':'다음 스테이지'}<ChevronRight size={18}/></button></div>}
+{g.screen==='victory'&&<div className="result win"><div className="stars">{[1,2,3].map(i=><Star key={i} size={44} className={i<=stars?'on':''} style={{animationDelay:`${i*.18}s`}}/>)}</div><h2>VICTORY</h2><p>{g.turn}턴 클리어 · EXP +{stage.exp.toLocaleString()}{!replay&&<> · 보상 <Gem size={14} color="#ff8ad8"/> {rewardOf(g.fight)}</>}</p>
+<div className="lvUps">{g.party.map(id=>{const a=g.levels[id]||1;const [b]=addExp(a,g.exp[id]||0,stage.exp);return <span key={id} className={b>a?'up':''}><Portrait id={id}/>Lv.{a}{b>a&&<><ChevronRight size={12}/><b>Lv.{b}</b></>}</span>})}</div>
+<button className="primary" onClick={finish}>{replay?'확인':g.chapter>=LAST-1?'엔딩으로':stage.rank==='boss'?'다음 지역':'다음 스테이지'}<ChevronRight size={18}/></button></div>}
 {g.screen==='defeat'&&<div className="result lose"><Skull size={48}/><h2>DEFEAT</h2><p>파티가 전멸했습니다.</p><div className="row"><button className="secondary" onClick={()=>go('lobby')}>로비로</button><button className="primary" onClick={startBattle}><RotateCcw size={16}/>재도전</button></div></div>}
 </section>}
 
