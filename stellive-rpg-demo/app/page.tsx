@@ -39,10 +39,10 @@ console.assert(addExp(1,0,expNeed(1)+expNeed(2)+1).join()==='3,1'&&addExp(49,0,1
 const REGION_MAP=[{name:'별빛 마을',icon:'⌂'},{name:'잊힌 숲',icon:'♣'},{name:'심연의 성역',icon:'✦'}];
 type Rank='normal'|'elite'|'boss';
 const STAGE_LIST:[number,string,Rank][]=[
-[0,'뒷골목 불량배','normal'],[0,'고블린 약탈대','normal'],[0,'굶주린 늑대 무리','normal'],[0,'청부 암살자','normal'],[0,'다이어울프 우두머리','elite'],[0,'심연의 하수인','boss'],
+[0,'균열 들개','normal'],[0,'균열 박쥐 떼','normal'],[0,'안개 나방','normal'],[0,'수정 거미','normal'],[0,'깨어난 석상 병사','normal'],[0,'성좌 사냥개','elite'],[0,'심연의 하수인','boss'],
 [1,'거대 거미','normal'],[1,'구울','normal'],[1,'해골 병사','normal'],[1,'머맨 약탈자','normal'],[1,'바다뱀','normal'],[1,'와이번','elite'],[1,'숲 트롤','boss'],
 [2,'망령 기사','normal'],[2,'촉수 마물','normal'],[2,'심연의 사도 광신도','normal'],[2,'고대 고룡','elite'],[2,'홍염의 패왕','elite'],[2,'마왕','boss']];
-// enemies are built for a recommended level (1 → 45 over the first 18 stages); [HP, attack, EXP] multipliers per rank.
+// enemies are built for a recommended level (1 → 45 over every stage but the last); [HP, attack, EXP] multipliers per rank.
 // the final boss wants Lv50 with 6 breakthroughs — balance sim (3-member parties, every combo hit parried perfectly): Lv50★6 wins 92–100%, ★5 ~85%, ★4 ~65%, ★0 under 5%
 const RANK_MUL:Record<Rank,number[]>={normal:[1,1,1],elite:[1.25,1.1,1.5],boss:[1.55,1.3,2]},FINAL_MUL=[3.08,2.37,3];
 const STAGES=STAGE_LIST.map(([region,name,rank],i)=>{const n=STAGE_LIST.slice(0,i+1).filter(s=>s[0]===region).length;const final=i===STAGE_LIST.length-1;
@@ -137,7 +137,7 @@ const SHAKE:Keyframe[]=[{transform:'none'},{transform:'translate(-9px,5px)'},{tr
 const anim=(el:Element|null|undefined,k:Keyframe[],ms:number)=>{el?.animate(k,{duration:ms,easing:'ease-out'})};
 let floatId=0;
 const LOADINGS=['/Loading.png'];
-const TIPS=['같은 유닛 멤버를 2명 이상 편성하면 공격력이 올라갑니다.','적의 다음 행동을 확인하고 보호막과 회복으로 대비하세요.','궁극기 게이지는 공격할 때마다 차오릅니다.','기본 공격은 SP를 1 회복합니다. 스킬과 번갈아 쓰세요.','보스의 체력이 절반 아래로 내려가면 광폭화합니다.','연속 공격은 번호 순서대로 노란 원이 겹치는 순간 터치하세요. 패리를 놓치면 쓰러질 수 있습니다!','클리어한 스테이지를 다시 골라 경험치를 모을 수 있습니다.','최종 보스는 Lv.50 · 풀돌파 파티를 기준으로 만들어졌습니다.'];
+const TIPS=['같은 유닛 멤버를 2명 이상 편성하면 공격력이 올라갑니다.','적의 다음 행동을 확인하고 보호막과 회복으로 대비하세요.','궁극기 게이지는 공격할 때마다 차오릅니다.','기본 공격은 SP를 1 회복합니다. 스킬과 번갈아 쓰세요.','보스의 체력이 절반 아래로 내려가면 광폭화합니다.','연속 공격은 밝게 빛나는 원부터 차례로, 노란 원이 겹치는 순간 터치하세요. 패리를 놓치면 쓰러질 수 있습니다!','클리어한 스테이지를 다시 골라 경험치를 모을 수 있습니다.','최종 보스는 Lv.50 · 풀돌파 파티를 기준으로 만들어졌습니다.'];
 // story backgrounds per chapter — one shared region image until each region gets its own
 const STORY_BG=['/Region.webp','/Region.webp','/Region.webp'];
 // battle backgrounds per region (null = plain gradient until the art exists)
@@ -269,12 +269,12 @@ return {dmg:Math.round(st.atk*coefOf(h.kind,picked.type,st.s)*buff),heal:support
 const startBattle=()=>{if(gRef.current.party.length===3)transit(beginBattle)};
 const beginBattle=()=>{const v=gRef.current;const b=bossOf(v.fight);
 setG({...v,screen:'battle',enemyHp:b.hp,used:[],turn:1,sp:5,shield:{},intent:'aoe',target:pick(v.party),energy:fill(h=>statOf(v,h.id).s>=4?50:0),hp:{...v.hp,...Object.fromEntries(v.party.map(id=>[id,statOf(v,id).hp]))}});
-v.party.forEach(id=>{const i=new Image();i.src=artSrc(id)});
+v.party.forEach(id=>{const i=new Image();i.src=artSrc(id);const j=new Image();j.src=gachaSrc(id)});
 setSel(v.party[0]);setArt(a=>({cur:v.party[0],prev:null,n:a.n+1}));setCombo(0);setFloats([]);setBusy(false);setTimeout(()=>flashBanner('BATTLE START',900),TILE_OUT_MS)};
 
 const enemyTurn=async()=>{
 const v=gRef.current;
-setCombo(0);setPick(null);await flashBanner(v.intent==='combo'?'COMBO ATTACK':'ENEMY TURN',700);
+setCombo(0);setPick(null);await flashBanner(v.intent==='combo'?'COMBO ATTACK':'ENEMY TURN',v.intent==='combo'?1100:700);
 const lunge=(ms:number)=>anim(bossRef.current,[{transform:'none'},{transform:'scale(1.18) translateY(36px)'},{transform:'none'}],ms);
 const hurt=(id:number)=>anim(heroRefs.current[id],[{filter:'brightness(1.8) sepia(1) hue-rotate(-50deg) saturate(6)',transform:'translateX(-7px)'},{transform:'translateX(6px)'},{filter:'none',transform:'none'}],420);
 const {hits}=enemyHits(v);const hp={...v.hp};let shield={...v.shield};
@@ -304,7 +304,7 @@ if(busy||v.screen!=='battle'||v.used.includes(who)||v.hp[who]<=0)return;
 if(type==='skill'&&v.sp<2)return;if(type==='ultimate'&&v.energy[who]<100)return;
 setBusy(true);
 if(who!==sel){setSel(who);await wait(450)}
-if(type==='ultimate'){setCutin(hero);await wait(1100);setCutin(null)}
+if(type==='ultimate'){setCutin(hero);await wait(1500);setCutin(null)}
 anim(heroRefs.current[who],[{transform:'none'},{transform:'translateY(-14px) scale(1.04)'},{transform:'none'}],340);
 anim(artRef.current,[{transform:'none'},{transform:'translateX(12%) scale(1.06)',filter:'brightness(1.35)'},{transform:'none',filter:'none'}],type==='basic'?380:480);
 await wait(170);
@@ -509,7 +509,12 @@ return <button key={x.name} className={`mapNode ${open?'open':''} ${!done&&prog.
 <div className="stageTag">STAGE <b>{stage.no}</b></div>
 <div className="bossBar"><div className="bossLabel"><i className={`bossTag ${stage.rank}`}>{stage.rank==='boss'?'BOSS':stage.rank==='elite'?'ELITE':'ENEMY'}</i><b>{boss.name}</b>{rage&&<em>광폭화</em>}{pv&&pv.dmg>0&&<em className="prevNum">예상 -{pv.dmg.toLocaleString()}</em>}<span>{g.enemyHp.toLocaleString()} / {boss.hp.toLocaleString()}</span></div>
 <div className="bar"><i className="ghost" style={{width:`${100*g.enemyHp/boss.hp}%`}}/><i className="fill" style={{width:`${100*g.enemyHp/boss.hp}%`}}/>{pv&&pv.dmg>0&&<i className="dmgPrev" style={{left:`${100*Math.max(0,g.enemyHp-pv.dmg)/boss.hp}%`,width:`${100*Math.min(g.enemyHp,pv.dmg)/boss.hp}%`}}/>}</div></div>
-<div className={`intent ${g.intent}`} key={`${g.turn}-${g.intent}-${g.target}`}>{g.intent==='aoe'?<Users size={13}/>:g.intent==='combo'?<Zap size={13}/>:<Crosshair size={13}/>}<span>다음 행동</span><b>{g.intent==='aoe'?'광역 공격':g.intent==='combo'?`연속 공격 ×${comboHitsOf(g.fight)}`:'강타'}</b><ChevronRight size={12}/><b>{g.intent==='aoe'?'파티 전체':H(g.target).name}</b>{Object.keys(preview.hits).length>0&&<em>총 -{Object.values(preview.hits).reduce((s,x)=>s+x.dmg-x.blocked,0)}</em>}</div>
+<div className={`intent ${g.intent}`} key={`${g.turn}-${g.intent}-${g.target}`}>
+<i className="intentIcon">{g.intent==='aoe'?<Users size={18}/>:g.intent==='combo'?<Zap size={18}/>:<Crosshair size={18}/>}</i>
+<div className="intentBody"><small>NEXT</small><b>{g.intent==='aoe'?'광역 공격':g.intent==='combo'?<>연속 공격 <u>×{comboHitsOf(g.fight)}</u></>:'강타'}</b></div>
+<ChevronRight size={14} className="intentArrow"/>
+<div className="intentTarget">{g.intent==='aoe'?<span>ALL</span>:<Portrait id={g.target}/>}</div>
+{Object.keys(preview.hits).length>0&&<em>-{Object.values(preview.hits).reduce((s,x)=>s+x.dmg-x.blocked,0).toLocaleString()}</em>}</div>
 </div>
 </header>
 <div className="arena" ref={arenaRef}>
@@ -529,7 +534,8 @@ return <button key={x.name} className={`mapNode ${open?'open':''} ${!done&&prog.
 {slash.key>0&&<svg key={'t'+slash.key} className={`trail ${slash.type}`} viewBox="0 0 100 100" preserveAspectRatio="none"><path pathLength={1} d="M40 40 Q52 -2 64 40"/></svg>}
 {combo>1&&<div className="combo" key={combo}><b>{combo}</b> HIT</div>}
 {floats.map(f=><div key={f.id} className={`float ${f.kind}`} style={{left:`${f.x}%`,top:`${f.y}%`}}>{f.text}</div>)}
-{banner&&<div className="banner" key={banner}>{banner}</div>}
+{banner==='COMBO ATTACK'?<div className="warn" key={banner}><i/><div className="warnBox"><small>⚠ WARNING ⚠</small><b>COMBO ATTACK</b></div><i/></div>
+:banner&&<div className="banner" key={banner}>{banner}</div>}
 </div>
 <div className="allyRow">{g.party.map(id=>{const h=H(id);const e=g.energy[id]||0;const off=busy||g.screen!=='battle'||g.used.includes(id)||g.hp[id]<=0;
 const hit=g.screen==='battle'?preview.hits[id]:undefined;const loss=hit?Math.min(g.hp[id],hit.dmg-hit.blocked):0;const after=g.hp[id]-loss;const ko=!!hit&&after<=0;
@@ -564,10 +570,13 @@ return <div className={`skillPop ${picked.type} col${g.party.indexOf(picked.id)}
 <button className="primary" disabled={!ok} onClick={()=>{setPick(null);act(picked.type,picked.id)}}>{ok?<>사용<ChevronRight size={15}/></>:reason}</button></div>
 </div>})()}
 {parry&&<div className="parry" key={parry.key}>
-<small className="parryHint">{H(parry.target).name.split(' ').pop()}에게 연속 공격! 번호 순서대로, 노란 원이 겹칠 때 터치</small>
+<small className="parryHint">{H(parry.target).name.split(' ').pop()}에게 연속 공격! 밝게 빛나는 원부터, 노란 원이 겹칠 때 터치</small>
 {parry.spots.map(([x,y],k)=>{const r=parry.res[k];return <button key={k} className={`parryDot ${r??''} ${k===parry.cur?'cur':''}`} style={{left:`${x}%`,top:`${y}%`,'--d':`${k*PARRY_GAP}ms`,'--ms':`${PARRY_MS}ms`} as React.CSSProperties} onPointerDown={()=>{if(k===parry.cur)tapParry()}} aria-label={`패리 ${k+1}`}>
-<i className="parryRing"/><b>{r?(r==='perfect'?'PERFECT':r==='good'?'GOOD':'MISS'):k+1}</b></button>})}</div>}
-{cutin&&<div className="cutin"><div className="stripe"/><BattleArt id={cutin.id} className="cutArt"/><div className="cutText"><small>ULTIMATE</small><b>{cutin.ultimate}</b></div></div>}
+<i className="parryRing"/>{r&&<b>{r==='perfect'?'PERFECT':r==='good'?'GOOD':'MISS'}</b>}</button>})}</div>}
+{cutin&&<div className="cutin" style={{'--c':GEN_COLOR[cutin.gen]} as React.CSSProperties}>{noGachaArt[cutin.id]?<><div className="stripe"/><BattleArt id={cutin.id} className="cutArt"/></>
+:<img className="cutFull" src={gachaSrc(cutin.id)} alt="" draggable={false} onError={()=>setNoGachaArt(m=>({...m,[cutin.id]:true}))}/>}
+<i className="cutLines"/><i className="cutShade"/><i className="cutBand"/><i className="cutFlash"/>
+<div className="cutText"><small>ULTIMATE</small><b>{cutin.ultimate}</b><em>{cutin.name}</em></div></div>}
 {g.screen==='victory'&&<div className="result win"><div className="stars">{[1,2,3].map(i=><Star key={i} size={44} className={i<=stars?'on':''} style={{animationDelay:`${i*.18}s`}}/>)}</div><h2>VICTORY</h2><p>{g.turn}턴 클리어 · EXP +{stage.exp.toLocaleString()}{!replay&&<> · 보상 <Gem size={14} color="#ff8ad8"/> {rewardOf(g.fight)}</>}</p>
 <div className="lvUps">{g.party.map(id=>{const a=g.levels[id]||1;const [b]=addExp(a,g.exp[id]||0,stage.exp);return <span key={id} className={b>a?'up':''}><Portrait id={id}/>Lv.{a}{b>a&&<><ChevronRight size={12}/><b>Lv.{b}</b></>}</span>})}</div>
 <button className="primary" onClick={finish}>{replay?'확인':g.chapter>=LAST-1?'엔딩으로':stage.rank==='boss'?'다음 지역':'다음 스테이지'}<ChevronRight size={18}/></button></div>}
