@@ -66,8 +66,8 @@ s.party=s.party.filter(id=>s.owned.includes(id));if(!s.owned.includes(s.lead))s.
 s.hp={...initial().hp,...s.hp};s.energy={...initial().energy,...s.energy};return s};
 const isCurrent=(s:Game)=>typeof s.shield==='object'&&!!s.shield&&!!s.levels&&!!s.exp&&typeof s.fight==='number'&&Array.isArray(s.owned)&&!!s.pity&&!!s.shards&&!!s.stars&&typeof s.diamonds==='number'&&Array.isArray(s.history)&&s.history.every(p=>typeof p==='object');
 // gacha, tuned like a typical mobile limited banner:
-// member 2% (half of it a pack member), member shards 18%, plain stone (miss) 80%, pity at 70 pulls
-const PULL_COST=160,CHAR_RATE=.02,SHARD_RATE=.18,PACK_SHARE=.5,PITY=70;
+// member 2%, member shards 18% (both only from the banner's pack), plain stone (miss) 80%, pity at 70 pulls
+const PULL_COST=160,CHAR_RATE=.02,SHARD_RATE=.18,PITY=70;
 const SHARD_DROP=5,DUP_SHARDS=25,SHARD_UNLOCK=50;
 // breakthrough (돌파) 0–6: a duplicate member is an instant +1, or spend that member's shards.
 // every level is +8% HP/ATK/DEF; levels 2/4/6 add a perk
@@ -98,21 +98,20 @@ const statOf=(v:{stars?:Record<number,number>;levels?:Record<number,number>},id:
 // shields go on every living ally separately (each absorbs its own hits first), so they are smaller than a party-wide pool would be
 const amtOf=(kind:Kind,type:Act,m:number)=>Math.round((kind==='heal'?(type==='ultimate'?350:190):(type==='ultimate'?170:80))*m);
 const sumShield=(s:Record<number,number>)=>Object.values(s).reduce((a,b)=>a+b,0);
-// one pack per unit; the starting members are left out of their pack
+// one pack per unit, holding every member of that unit (starting members too — pulling one is a breakthrough)
 type Banner={title:string;tag:string;remain:string;pack:number[];color:string;art:string|null};
-const unitPack=(gen:number)=>HEROES.filter(h=>h.gen===gen&&!STARTERS.includes(h.id)).map(h=>h.id);
+const unitPack=(gen:number)=>HEROES.filter(h=>h.gen===gen).map(h=>h.id);
 const BANNERS:Banner[]=[
 {title:'에버리스',tag:'1기 팩',remain:'21일 16시간',pack:unitPack(1),color:GEN_COLOR[1],art:'/Pack_1.png'},
 {title:'유니버스',tag:'2기 팩',remain:'21일 16시간',pack:unitPack(2),color:GEN_COLOR[2],art:'/Pack_2.jpg'},
 {title:'클리셰',tag:'3기 팩',remain:'21일 16시간',pack:unitPack(3),color:GEN_COLOR[3],art:'/Pack_3.jpg'}];
 type Pull={kind:'stone'|'shard'|'char';id:number;isNew?:boolean;star?:number};
 const inPack=(b:Banner,id:number)=>b.pack.includes(id);
-const memberOf=(b:Banner)=>b.pack.length&&Math.random()<PACK_SHARE?pick(b.pack):pick(HEROES.filter(h=>!inPack(b,h.id))).id;
-// one pull; `count` is pulls since the last pack member (any member on the standard banner)
+// one pull; `count` is pulls since the last member
 const rollOne=(b:Banner,count:number):Pull=>{
-if(count+1>=PITY)return {kind:'char',id:b.pack.length?pick(b.pack):pick(HEROES).id};
+if(count+1>=PITY)return {kind:'char',id:pick(b.pack)};
 const r=Math.random();
-return r<CHAR_RATE?{kind:'char',id:memberOf(b)}:r<CHAR_RATE+SHARD_RATE?{kind:'shard',id:memberOf(b)}:{kind:'stone',id:0}};
+return r<CHAR_RATE?{kind:'char',id:pick(b.pack)}:r<CHAR_RATE+SHARD_RATE?{kind:'shard',id:pick(b.pack)}:{kind:'stone',id:0}};
 // the enemy's next move is decided in advance so the UI can preview exactly what it will do
 // combo = one 600%-attack blow (defense applies once) split into the stage's hit count: 2 at 1-1, +1 every 4 stages, 6 from 3-4.
 // each hit can be parried (perfect → 0, good → 30%, miss → full). balance assumes every hit is parried perfectly;
@@ -149,6 +148,8 @@ function Portrait({id,className}:{id:number;className?:string}){return <img clas
 // battle art: public/battle/{이름}_전투.png — falls back to 리제 until the file exists
 const DEFAULT_ART=6;
 const artSrc=(id:number)=>`/battle/${encodeURIComponent(`${H(id).name.split(' ').pop()}_전투`)}.png`;
+// animated in-battle art: public/battle/{이름}_전투ani.gif — falls back to the still art when missing
+const aniSrc=(id:number)=>`/battle/${encodeURIComponent(`${H(id).name.split(' ').pop()}_전투ani`)}.gif`;
 // gacha reveal art: public/gacha/{이름}_뽑기.png (full-scene illustration) — falls back to the battle cutout when missing
 // where the face sits in each gacha illustration (x%, y%), used to crop it into a character card
 const ART_FOCUS:Record<number,[number,number]>={1:[56,20],2:[54,24],3:[60,32],4:[57,19],5:[57,18],6:[57,33],7:[57,24],8:[74,24],9:[56,20],10:[63,23],11:[35,24]};
@@ -158,7 +159,7 @@ const CARD_ZOOM=1.9;
 const cardCrop=(id:number):React.CSSProperties=>{const [fx,fy]=ART_FOCUS[id]??[50,25];const o=(t:number,f:number)=>Math.max(0,Math.min(100,(t-CARD_ZOOM*f)/(1-CARD_ZOOM)));
 return {objectPosition:`${fx}% ${fy}%`,transformOrigin:`${o(50,fx)}% ${o(40,fy)}%`}};
 const gachaSrc=(id:number)=>`/gacha/${encodeURIComponent(`${H(id).name.split(' ').pop()}_뽑기`)}.png`;
-function BattleArt({id,className}:{id:number;className?:string}){return <img key={id} className={className} src={artSrc(id)} alt="" draggable={false} onError={e=>{const t=e.currentTarget;if(!t.dataset.fb){t.dataset.fb='1';t.src=artSrc(DEFAULT_ART)}}}/>}
+function BattleArt({id,className,ani}:{id:number;className?:string;ani?:boolean}){return <img key={id} className={ani?`ani ${className??''}`:className} src={ani?aniSrc(id):artSrc(id)} alt="" draggable={false} onError={e=>{const t=e.currentTarget,fb=t.dataset.fb;if(ani&&!fb){t.dataset.fb='still';t.src=artSrc(id)}else if(fb!=='default'){t.dataset.fb='default';t.src=artSrc(DEFAULT_ART)}}}/>}
 
 // sparkle debris shed along the comet's path (top-left → centre), timed to when the head passes
 // (the comet eases in, so it reaches fraction t of the path at roughly t^0.6 of its flight time)
@@ -269,7 +270,7 @@ return {dmg:Math.round(st.atk*coefOf(h.kind,picked.type,st.s)*buff),heal:support
 const startBattle=()=>{if(gRef.current.party.length===3)transit(beginBattle)};
 const beginBattle=()=>{const v=gRef.current;const b=bossOf(v.fight);
 setG({...v,screen:'battle',enemyHp:b.hp,used:[],turn:1,sp:5,shield:{},intent:'aoe',target:pick(v.party),energy:fill(h=>statOf(v,h.id).s>=4?50:0),hp:{...v.hp,...Object.fromEntries(v.party.map(id=>[id,statOf(v,id).hp]))}});
-v.party.forEach(id=>{const i=new Image();i.src=artSrc(id);const j=new Image();j.src=gachaSrc(id)});
+v.party.forEach(id=>{const i=new Image();i.src=aniSrc(id);const j=new Image();j.src=gachaSrc(id)});
 setSel(v.party[0]);setArt(a=>({cur:v.party[0],prev:null,n:a.n+1}));setCombo(0);setFloats([]);setBusy(false);setTimeout(()=>flashBanner('BATTLE START',900),TILE_OUT_MS)};
 
 const enemyTurn=async()=>{
@@ -405,7 +406,7 @@ return <main className="phone">
 <div className="pickupBox" key={'p'+bannerIdx}>
 {bn.pack.length>0?<><div className="pickupRow">{bn.pack.map(id=><button key={id} className="pickFace" style={{'--c':GEN_COLOR[H(id).gen]} as React.CSSProperties} onClick={()=>openDetail(id)}><Portrait id={id}/>{!g.owned.includes(id)&&<i>NEW</i>}</button>)}
 <div className="pickName"><span className="starRow">{[0,1,2,3,4].map(i=><Star key={i} size={11}/>)}</span><b>{bn.pack.length<=2?bn.pack.map(id=>`「${H(id).name.split(' ').pop()}」`).join(' '):`${bn.title} ${bn.pack.length}인`}</b></div></div>
-<p className="rateUp">{bn.title} 멤버 획득 확률 UP!!</p></>:<p className="rateUp">전체 멤버 모집</p>}
+<p className="rateUp">{bn.title} 멤버만 등장!!</p></>:<p className="rateUp">전체 멤버 모집</p>}
 <div className="shopBtns"><button onClick={()=>setShopModal('rates')}>상세 정보</button><button onClick={()=>setShopModal('history')}>모집 기록</button><button onClick={()=>setShopModal('shards')}>조각 교환</button></div>
 </div>
 <div className="pullBox">
@@ -418,8 +419,8 @@ return <main className="phone">
 <button className="iconRound close" onClick={()=>setShopModal(null)} aria-label="닫기"><X size={20}/></button>
 {shopModal==='rates'?<><h3>{bn.title} · 획득 확률</h3>
 <div className="rateTable">
-<div className="tier char"><b>멤버</b><span>{(CHAR_RATE*100).toFixed(1)}%</span><small>{bn.pack.length?`${bn.title} 팩 ${(CHAR_RATE*PACK_SHARE*100).toFixed(1)}% (${bn.pack.map(id=>H(id).name.split(' ').pop()).join('·')} 균등) · 그 외 멤버 ${(CHAR_RATE*(1-PACK_SHARE)*100).toFixed(1)}%`:'전체 멤버 균등'}</small></div>
-<div className="tier shard"><b>멤버 조각 ×{SHARD_DROP}</b><span>{(SHARD_RATE*100).toFixed(1)}%</span><small>{bn.pack.length?`${bn.title} 멤버 조각 ${(SHARD_RATE*PACK_SHARE*100).toFixed(1)}%`:'전체 멤버 균등'} · 조각 {SHARD_UNLOCK}개로 멤버 교환</small></div>
+<div className="tier char"><b>멤버</b><span>{(CHAR_RATE*100).toFixed(1)}%</span><small>{bn.pack.map(id=>H(id).name.split(' ').pop()).join('·')} 균등</small></div>
+<div className="tier shard"><b>멤버 조각 ×{SHARD_DROP}</b><span>{(SHARD_RATE*100).toFixed(1)}%</span><small>{bn.title} 멤버 균등 · 조각 {SHARD_UNLOCK}개로 멤버 교환</small></div>
 <div className="tier stone"><b>평범한 돌 (꽝)</b><span>{((1-CHAR_RATE-SHARD_RATE)*100).toFixed(1)}%</span><small>아무 효과 없음</small></div>
 </div>
 <p className="modalNote">천장: {PITY}회째 모집에서 {bn.pack.length?`${bn.title} 멤버`:'멤버'} 확정 (획득 시 초기화) · 보유 멤버 중복 시 1돌파 (6돌파 이후 조각 ×{DUP_SHARDS}) · 1회 <Gem size={11}/>{PULL_COST} · 스테이지 첫 클리어 <Gem size={11}/>500부터 스테이지마다 +50 (정예 ×2 · 보스 ×3)</p></>
@@ -523,11 +524,11 @@ return <button key={x.name} className={`mapNode ${open?'open':''} ${!done&&prog.
 {slash.key>0&&<div key={slash.key} className={`slash ${slash.type}`}/>}
 {slash.key>0&&<i key={'r'+slash.key} className={`impactRing ${slash.type}`}/>}</div>
 <div className="artStage">
-{art.prev!==null&&<div key={'p'+art.n} className="heroArt out" onAnimationEnd={e=>e.target===e.currentTarget&&setArt(a=>({...a,prev:null}))}><BattleArt id={art.prev}/></div>}
+{art.prev!==null&&<div key={'p'+art.n} className="heroArt out" onAnimationEnd={e=>e.target===e.currentTarget&&setArt(a=>({...a,prev:null}))}><BattleArt ani id={art.prev}/></div>}
 <div key={'c'+art.n} ref={artRef} className="heroArt in" style={{'--c':GEN_COLOR[H(art.cur).gen]} as React.CSSProperties}>
 <i className="artGlow"/><i className="speedLines"/>
-<BattleArt id={art.cur} className="ghost g1"/><BattleArt id={art.cur} className="ghost g2"/>
-<div className="artIdle"><BattleArt id={art.cur}/></div>
+<BattleArt ani id={art.cur} className="ghost g1"/><BattleArt ani id={art.cur} className="ghost g2"/>
+<div className="artIdle"><BattleArt ani id={art.cur}/></div>
 </div>
 <div key={'n'+art.n} className="artName" style={{'--c':GEN_COLOR[H(art.cur).gen]} as React.CSSProperties}><small>{UNIT[H(art.cur).gen]} · {H(art.cur).job}</small><b>{H(art.cur).name}</b></div>
 </div>
